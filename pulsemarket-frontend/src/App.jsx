@@ -10,12 +10,7 @@ import { PositionsView } from "./components/PositionsView";
 import { AdminView } from "./components/AdminView";
 import { CreateMarketView } from "./components/CreateMarketView";
 import { BridgeModal } from "./components/BridgeModal";
-import {
-  CHAIN_ID,
-  FEE_DENOM,
-  L1_CHAIN_ID,
-  ORACLE_ADDRESS,
-} from "./config/chain";
+import { L1_CHAIN_ID, ORACLE_ADDRESS } from "./config/chain";
 import { usePulseMarkets, useUserPositions } from "./hooks/usePulseMarkets";
 import {
   AutoSignSessionProvider,
@@ -316,8 +311,6 @@ function AppShell() {
     () => ({
       srcChainId: L1_CHAIN_ID,
       srcDenom: "uinit",
-      dstChainId: CHAIN_ID,
-      dstDenom: FEE_DENOM,
     }),
     [],
   );
