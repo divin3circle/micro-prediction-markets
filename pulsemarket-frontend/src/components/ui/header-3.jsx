@@ -31,7 +31,7 @@ export function Header({ walletNode, rightInfoNode, onDeposit }) {
     >
       <nav className="mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between px-4">
         <div className="flex items-center gap-4 lg:gap-7">
-          <Link to="/" className="rounded-md p-1 hover:bg-[#16161A]">
+          <Link to="/" className="rounded-md p-1 ">
             <Wordmark />
           </Link>
 
@@ -195,8 +195,8 @@ function useScroll(threshold) {
 function Wordmark() {
   return (
     <span className="text-xl lowercase font-mono font-semibold tracking-tight">
-      <span className="text-white">PULSE.</span>
-      <span className="text-[#7C5CFC]">MARKET</span>
+      <span className="text-white">im</span>
+      <span className="text-[#7C5CFC]">pulsive</span>
     </span>
   );
 }

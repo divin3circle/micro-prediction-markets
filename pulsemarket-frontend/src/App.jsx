@@ -255,7 +255,13 @@ function AppShell() {
     try {
       openDeposit?.({
         chainId: CHAIN_ID,
-        denoms: [L1_DENOM, FEE_DENOM],
+        denoms: [FEE_DENOM],
+        srcOptions: [
+          {
+            chainId: L1_CHAIN_ID,
+            denom: L1_DENOM,
+          },
+        ],
       });
     } catch (e) {
       setDepositPending(false);
@@ -351,7 +357,13 @@ function AppShell() {
     }, 15000);
 
     return () => clearInterval(timer);
-  }, [depositPending, bridgeStartBalance, initiaAddress, refreshBalance, setFlash]);
+  }, [
+    depositPending,
+    bridgeStartBalance,
+    initiaAddress,
+    refreshBalance,
+    setFlash,
+  ]);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
