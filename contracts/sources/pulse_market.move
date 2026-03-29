@@ -1,9 +1,13 @@
 module pulse_market::pulse_market {
     use std::signer;
-    use std::string::String;
+    use std::string::{Self, String};
     use std::vector;
 
+    use minitia_std::coin;
     use minitia_std::event;
+    use minitia_std::fungible_asset::Metadata;
+    use minitia_std::object::{Self, ExtendRef, Object};
+    use minitia_std::primary_fungible_store;
     use minitia_std::simple_map;
     use minitia_std::table;
     use minitia_std::timestamp;
@@ -30,6 +34,9 @@ module pulse_market::pulse_market {
     const E_FEE_TOO_HIGH: u64 = 10;
     const E_CLOSE_TIME_PAST: u64 = 11;
     const E_RESOLVE_BEFORE_CLOSE: u64 = 12;
+
+    const NATIVE_SYMBOL: vector<u8> = b"umin";
+    const VAULT_SEED: vector<u8> = b"pulse_market_vault";
 
     struct Market has store {
         id: u64,
@@ -58,6 +65,8 @@ module pulse_market::pulse_market {
         oracle: address,
         fee_bps: u64,
         fee_recipient: address,
+        vault_owner: address,
+        vault_extend_ref: ExtendRef,
         vault_balance: u64,
         fee_collected_total: u64,
     }
@@ -97,6 +106,9 @@ module pulse_market::pulse_market {
 
     fun init_module(publisher: &signer) {
         let publisher_addr = signer::address_of(publisher);
+        let vault_constructor = object::create_named_object(publisher, VAULT_SEED);
+        let vault_owner = object::address_from_constructor_ref(&vault_constructor);
+        let vault_extend_ref = object::generate_extend_ref(&vault_constructor);
         move_to(
             publisher,
             MarketStore {
@@ -107,6 +119,8 @@ module pulse_market::pulse_market {
                 oracle: publisher_addr,
                 fee_bps: 200,
                 fee_recipient: publisher_addr,
+                vault_owner,
+                vault_extend_ref,
                 vault_balance: 0,
                 fee_collected_total: 0,
             },
@@ -171,6 +185,7 @@ module pulse_market::pulse_market {
         assert!(market.status == STATUS_OPEN, E_MARKET_NOT_OPEN);
         assert!(timestamp::now_seconds() < market.close_time, E_BETTING_CLOSED);
 
+        primary_fungible_store::transfer(user, native_metadata(), store.vault_owner, amount);
         store.vault_balance = store.vault_balance + amount;
 
         let user_addr = signer::address_of(user);
@@ -279,6 +294,8 @@ module pulse_market::pulse_market {
 
         assert!(store.vault_balance >= payout, E_NOT_WINNER);
         store.vault_balance = store.vault_balance - payout;
+        let vault_signer = object::generate_signer_for_extending(&store.vault_extend_ref);
+        primary_fungible_store::transfer(&vault_signer, native_metadata(), user_addr, payout);
 
         let positions = table::borrow_mut(&mut store.positions, market_id);
         let position = simple_map::borrow_mut(positions, &user_addr);
@@ -314,6 +331,13 @@ module pulse_market::pulse_market {
         let refund_amount = position.yes_amount + position.no_amount;
         assert!(store.vault_balance >= refund_amount, E_NOT_WINNER);
         store.vault_balance = store.vault_balance - refund_amount;
+        let vault_signer = object::generate_signer_for_extending(&store.vault_extend_ref);
+        primary_fungible_store::transfer(
+            &vault_signer,
+            native_metadata(),
+            user_addr,
+            refund_amount,
+        );
 
         position.claimed = true;
     }
@@ -405,6 +429,15 @@ module pulse_market::pulse_market {
         borrow_global<MarketStore>(@pulse_market).fee_collected_total
     }
 
+    #[view]
+    public fun get_vault_owner(): address acquires MarketStore {
+        borrow_global<MarketStore>(@pulse_market).vault_owner
+    }
+
+    fun native_metadata(): Object<Metadata> {
+        coin::metadata(@minitia_std, string::utf8(NATIVE_SYMBOL))
+    }
+
     fun maybe_collect_fee(store: &mut MarketStore, market_id: u64, total_pool: u64) {
         let charged = table::borrow_mut(&mut store.fee_charged, market_id);
         if (!*charged) {
@@ -412,9 +445,26 @@ module pulse_market::pulse_market {
             assert!(store.vault_balance >= fee_amount, E_NOT_WINNER);
             store.vault_balance = store.vault_balance - fee_amount;
             store.fee_collected_total = store.fee_collected_total + fee_amount;
+            if (fee_amount > 0) {
+                let vault_signer =
+                    object::generate_signer_for_extending(&store.vault_extend_ref);
+                primary_fungible_store::transfer(
+                    &vault_signer,
+                    native_metadata(),
+                    store.fee_recipient,
+                    fee_amount,
+                );
+            };
             *charged = true;
         };
     }
+
+    #[test_only]
+    use minitia_std::account;
+    #[test_only]
+    use minitia_std::managed_coin;
+    #[test_only]
+    use minitia_std::option;
 
     #[test_only]
     public fun init_for_test(publisher: &signer) {
@@ -422,5 +472,28 @@ module pulse_market::pulse_market {
         if (!exists<MarketStore>(publisher_addr)) {
             init_module(publisher);
         };
+    }
+
+    #[test_only]
+    fun ensure_native_coin_for_test() {
+        if (!coin::is_coin_by_symbol(@minitia_std, string::utf8(NATIVE_SYMBOL))) {
+            let chain = account::create_signer_for_test(@minitia_std);
+            managed_coin::initialize(
+                &chain,
+                option::none(),
+                string::utf8(b"Mini Native"),
+                string::utf8(NATIVE_SYMBOL),
+                6,
+                string::utf8(b""),
+                string::utf8(b""),
+            );
+        };
+    }
+
+    #[test_only]
+    public fun mint_native_for_test(recipient: address, amount: u64) {
+        ensure_native_coin_for_test();
+        let chain = account::create_signer_for_test(@minitia_std);
+        managed_coin::mint_to(&chain, recipient, native_metadata(), amount);
     }
 }
