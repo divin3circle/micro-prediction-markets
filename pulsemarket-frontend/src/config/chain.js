@@ -9,6 +9,9 @@ export const FEE_DENOM = import.meta.env.VITE_FEE_DENOM || "umin";
 export const MODULE_NAME = "pulse_market";
 export const APPCHAIN_NAME = CHAIN_ID;
 export const L1_CHAIN_ID = import.meta.env.VITE_L1_CHAIN_ID || "initiation-2";
+export const L1_LCD_URL =
+  import.meta.env.VITE_L1_LCD_URL || "https://lcd.testnet.initia.xyz";
+export const L1_DENOM = import.meta.env.VITE_L1_DENOM || "uinit";
 
 export const customChain = {
   chain_id: CHAIN_ID,

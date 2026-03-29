@@ -18,6 +18,7 @@ import {
 } from "./context/AutoSignSessionContext";
 import {
   getCreationFee,
+  getL1InitBalance,
   getMarket,
   getMarketCount,
   getNativeBalance,
@@ -124,6 +125,9 @@ function AppShell() {
   const [balanceMicro, setBalanceMicro] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [hasLoadedBalance, setHasLoadedBalance] = useState(false);
+  const [l1BalanceMicro, setL1BalanceMicro] = useState(null);
+  const [l1BalanceLoading, setL1BalanceLoading] = useState(false);
+  const [hasLoadedL1Balance, setHasLoadedL1Balance] = useState(false);
   const [bridgeOpen, setBridgeOpen] = useState(false);
   const [bridgeStartBalance, setBridgeStartBalance] = useState(null);
 
@@ -245,6 +249,30 @@ function AppShell() {
     setBridgeOpen(true);
   }, [initiaAddress, openConnect, refreshBalance]);
 
+  const refreshL1Balance = useCallback(
+    async (showSkeleton = false) => {
+      if (!initiaAddress) {
+        setL1BalanceMicro(null);
+        setL1BalanceLoading(false);
+        return null;
+      }
+      if (showSkeleton && !hasLoadedL1Balance) {
+        setL1BalanceLoading(true);
+      }
+      try {
+        const next = await getL1InitBalance(initiaAddress);
+        setL1BalanceMicro(next);
+        setHasLoadedL1Balance(true);
+        return next;
+      } catch {
+        return null;
+      } finally {
+        setL1BalanceLoading(false);
+      }
+    },
+    [hasLoadedL1Balance, initiaAddress],
+  );
+
   useEffect(() => {
     if (isAdmin) {
       refreshAdmin().catch(() => {});
@@ -277,16 +305,20 @@ function AppShell() {
     if (!initiaAddress) {
       setBalanceMicro(null);
       setHasLoadedBalance(false);
+      setL1BalanceMicro(null);
+      setHasLoadedL1Balance(false);
       return;
     }
 
     refreshBalance(true);
+    refreshL1Balance(true);
     const timer = setInterval(() => {
       refreshBalance(false);
+      refreshL1Balance(false);
     }, 30000);
 
     return () => clearInterval(timer);
-  }, [initiaAddress, refreshBalance]);
+  }, [initiaAddress, refreshBalance, refreshL1Balance]);
 
   useEffect(() => {
     if (!bridgeOpen || !initiaAddress) return;
@@ -324,6 +356,8 @@ function AppShell() {
         onOpenDeposit={openDepositBridge}
         balanceMicro={balanceMicro}
         balanceLoading={balanceLoading && !hasLoadedBalance}
+        l1BalanceMicro={l1BalanceMicro}
+        l1BalanceLoading={l1BalanceLoading && !hasLoadedL1Balance}
         onEnableAutoSign={async () => {
           if (!initiaAddress) {
             openConnect?.();

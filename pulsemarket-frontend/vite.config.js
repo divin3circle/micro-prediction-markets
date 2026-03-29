@@ -1,13 +1,17 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
+import path from "path";
 
 export default defineConfig({
   resolve: {
-    dedupe: ['react', 'react-dom', 'wagmi', '@tanstack/react-query', 'viem'],
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+    dedupe: ["react", "react-dom", "wagmi", "@tanstack/react-query", "viem"],
   },
   optimizeDeps: {
-    include: ['wagmi', '@tanstack/react-query', 'viem'],
+    include: ["wagmi", "@tanstack/react-query", "viem"],
   },
   plugins: [
     react(),
@@ -18,4 +22,4 @@ export default defineConfig({
       },
     }),
   ],
-})
+});

@@ -5,6 +5,8 @@ import {
   CHAIN_ID,
   FEE_DENOM,
   LCD_URL,
+  L1_DENOM,
+  L1_LCD_URL,
   MODULE_ADDRESS,
   MODULE_NAME,
 } from "../config/chain";
@@ -103,14 +105,22 @@ export async function getUserPosition(marketId, userAddress) {
   };
 }
 
-export async function getNativeBalance(userAddress) {
-  const url = `${LCD_URL}/cosmos/bank/v1beta1/balances/${userAddress}/by_denom?denom=${FEE_DENOM}`;
+async function getBalanceByDenom(lcdUrl, denom, userAddress) {
+  const url = `${lcdUrl}/cosmos/bank/v1beta1/balances/${userAddress}/by_denom?denom=${denom}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error("Failed to fetch balance");
   }
   const json = await res.json();
   return Number(json?.balance?.amount || 0);
+}
+
+export async function getNativeBalance(userAddress) {
+  return getBalanceByDenom(LCD_URL, FEE_DENOM, userAddress);
+}
+
+export async function getL1InitBalance(userAddress) {
+  return getBalanceByDenom(L1_LCD_URL, L1_DENOM, userAddress);
 }
 
 export function usePulseMarketTx() {
