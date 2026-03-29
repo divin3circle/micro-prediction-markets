@@ -9,8 +9,13 @@ import { Toast } from "./components/Toast";
 import { PositionsView } from "./components/PositionsView";
 import { AdminView } from "./components/AdminView";
 import { CreateMarketView } from "./components/CreateMarketView";
-import { BridgeModal } from "./components/BridgeModal";
-import { L1_CHAIN_ID, ORACLE_ADDRESS } from "./config/chain";
+import {
+  CHAIN_ID,
+  FEE_DENOM,
+  L1_CHAIN_ID,
+  L1_DENOM,
+  ORACLE_ADDRESS,
+} from "./config/chain";
 import { usePulseMarkets, useUserPositions } from "./hooks/usePulseMarkets";
 import {
   AutoSignSessionProvider,
@@ -98,7 +103,7 @@ function App() {
 
 function AppShell() {
   const navigate = useNavigate();
-  const { initiaAddress, openConnect } = useInterwovenKit();
+  const { initiaAddress, openConnect, openDeposit } = useInterwovenKit();
   const {
     sessionActive,
     initializeSession,
@@ -128,7 +133,7 @@ function AppShell() {
   const [l1BalanceMicro, setL1BalanceMicro] = useState(null);
   const [l1BalanceLoading, setL1BalanceLoading] = useState(false);
   const [hasLoadedL1Balance, setHasLoadedL1Balance] = useState(false);
-  const [bridgeOpen, setBridgeOpen] = useState(false);
+  const [depositPending, setDepositPending] = useState(false);
   const [bridgeStartBalance, setBridgeStartBalance] = useState(null);
 
   const setFlash = useCallback((message) => {
@@ -246,8 +251,17 @@ function AppShell() {
     }
     const baseline = await refreshBalance(true);
     setBridgeStartBalance(typeof baseline === "number" ? baseline : 0);
-    setBridgeOpen(true);
-  }, [initiaAddress, openConnect, refreshBalance]);
+    setDepositPending(true);
+    try {
+      openDeposit?.({
+        chainId: CHAIN_ID,
+        denoms: [L1_DENOM, FEE_DENOM],
+      });
+    } catch (e) {
+      setDepositPending(false);
+      setFlash(e?.message || "Failed to open deposit flow");
+    }
+  }, [initiaAddress, openConnect, refreshBalance, openDeposit, setFlash]);
 
   const refreshL1Balance = useCallback(
     async (showSkeleton = false) => {
@@ -321,7 +335,7 @@ function AppShell() {
   }, [initiaAddress, refreshBalance, refreshL1Balance]);
 
   useEffect(() => {
-    if (!bridgeOpen || !initiaAddress) return;
+    if (!depositPending || !initiaAddress) return;
 
     const timer = setInterval(async () => {
       const next = await refreshBalance(false);
@@ -330,22 +344,14 @@ function AppShell() {
         typeof bridgeStartBalance === "number" &&
         next > bridgeStartBalance
       ) {
-        setBridgeOpen(false);
+        setDepositPending(false);
         setBridgeStartBalance(next);
         setFlash("Deposit confirmed — you're ready to bet!");
       }
     }, 15000);
 
     return () => clearInterval(timer);
-  }, [bridgeOpen, bridgeStartBalance, initiaAddress, refreshBalance, setFlash]);
-
-  const bridgeDefaults = useMemo(
-    () => ({
-      srcChainId: L1_CHAIN_ID,
-      srcDenom: "uinit",
-    }),
-    [],
-  );
+  }, [depositPending, bridgeStartBalance, initiaAddress, refreshBalance, setFlash]);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -517,11 +523,11 @@ function AppShell() {
         }}
       />
 
-      <BridgeModal
-        open={bridgeOpen}
-        onClose={() => setBridgeOpen(false)}
-        bridgeDefaults={bridgeDefaults}
-      />
+      {depositPending && (
+        <div className="pointer-events-none fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-full border border-[#2A2A35] bg-[#171722] px-4 py-2 text-xs text-[#CBD5E1]">
+          Waiting for deposit confirmation on {CHAIN_ID}...
+        </div>
+      )}
     </div>
   );
 }

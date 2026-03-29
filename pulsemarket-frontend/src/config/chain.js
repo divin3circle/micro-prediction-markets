@@ -10,8 +10,10 @@ export const MODULE_NAME = "pulse_market";
 export const APPCHAIN_NAME = CHAIN_ID;
 export const L1_CHAIN_ID = import.meta.env.VITE_L1_CHAIN_ID || "initiation-2";
 export const L1_LCD_URL =
-  import.meta.env.VITE_L1_LCD_URL || "https://lcd.testnet.initia.xyz";
+  import.meta.env.VITE_L1_LCD_URL || "https://rest.testnet.initia.xyz";
 export const L1_DENOM = import.meta.env.VITE_L1_DENOM || "uinit";
+export const EXECUTOR_URL =
+  import.meta.env.VITE_EXECUTOR_URL || "http://localhost:3000";
 
 export const customChain = {
   chain_id: CHAIN_ID,
@@ -52,6 +54,7 @@ export const customChain = {
   ],
   metadata: {
     is_l1: false,
+    executor_uri: EXECUTOR_URL,
     minitia: { type: "minimove" },
   },
 };

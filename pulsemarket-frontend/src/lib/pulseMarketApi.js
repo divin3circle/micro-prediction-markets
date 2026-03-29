@@ -106,7 +106,10 @@ export async function getUserPosition(marketId, userAddress) {
 }
 
 async function getBalanceByDenom(lcdUrl, denom, userAddress) {
-  const url = `${lcdUrl}/cosmos/bank/v1beta1/balances/${userAddress}/by_denom?denom=${denom}`;
+  const base = String(lcdUrl || "").replace(/\/$/, "");
+  const encodedAddress = encodeURIComponent(userAddress);
+  const encodedDenom = encodeURIComponent(denom);
+  const url = `${base}/cosmos/bank/v1beta1/balances/${encodedAddress}/by_denom?denom=${encodedDenom}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error("Failed to fetch balance");
@@ -120,7 +123,19 @@ export async function getNativeBalance(userAddress) {
 }
 
 export async function getL1InitBalance(userAddress) {
-  return getBalanceByDenom(L1_LCD_URL, L1_DENOM, userAddress);
+  const fallback = "https://rest.testnet.initia.xyz";
+  const endpoints = [L1_LCD_URL, fallback].filter(Boolean);
+  const uniqueEndpoints = [...new Set(endpoints)];
+
+  for (const endpoint of uniqueEndpoints) {
+    try {
+      return await getBalanceByDenom(endpoint, L1_DENOM, userAddress);
+    } catch {
+      // Try the next endpoint.
+    }
+  }
+
+  throw new Error("Failed to fetch L1 INIT balance");
 }
 
 export function usePulseMarketTx() {
