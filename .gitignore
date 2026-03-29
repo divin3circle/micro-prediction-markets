@@ -1,0 +1,7 @@
+.agents/
+.claude/
+.dist/
+skills-lock.json
+prediction-market-spec.md
+
+contracts/build/

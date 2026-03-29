@@ -1,0 +1,11 @@
+[package]
+name = "pulse_market"
+version = "0.0.0"
+
+[dependencies]
+MinitiaStdlib = { git = "https://github.com/initia-labs/move-natives.git", subdir = "minitia_stdlib", rev = "main"}
+
+[addresses]
+pulse_market = "_"
+std = "0x1"
+
