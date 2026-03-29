@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useInitiaUsername } from "../hooks/useInitiaUsername";
 
 function toMicro(value) {
   const num = Number(value || 0);
@@ -12,10 +13,20 @@ function fromMicro(value) {
   });
 }
 
-export function BetModal({ open, market, initialSide, onClose, onPlace }) {
+export function BetModal({
+  open,
+  market,
+  initialSide,
+  onClose,
+  onPlace,
+  connectedAddress,
+}) {
   const [side, setSide] = useState(initialSide ? "YES" : "NO");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("Placing bet...");
+  const { username, loading: usernameLoading } =
+    useInitiaUsername(connectedAddress);
 
   if (!open || !market) return null;
 
@@ -47,10 +58,13 @@ export function BetModal({ open, market, initialSide, onClose, onPlace }) {
     if (!betMicro || busy) return;
     try {
       setBusy(true);
+      setBusyLabel("Enabling auto-sign...");
       await onPlace({
         marketId: market.id,
         betYes: side === "YES",
         amount: betMicro,
+        onAutoSignStart: () => setBusyLabel("Enabling auto-sign..."),
+        onTxStart: () => setBusyLabel("Placing bet..."),
       });
       onClose();
       setAmount("");
@@ -142,13 +156,27 @@ export function BetModal({ open, market, initialSide, onClose, onPlace }) {
           </div>
         </div>
 
+        {connectedAddress && !username && !usernameLoading && (
+          <p className="mb-4 text-xs text-[#A1A1B0]">
+            {"Get a .init username to personalise your profile -> "}
+            <a
+              href="https://app.testnet.initia.xyz/usernames"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[#7C5CFC] underline-offset-2 hover:underline"
+            >
+              Register now
+            </a>
+          </p>
+        )}
+
         <button
           type="button"
           onClick={place}
           disabled={busy || !betMicro}
           className="h-12 w-full rounded-xl bg-[#7C5CFC] text-white transition active:scale-[0.97] disabled:opacity-50"
         >
-          {busy ? "Placing..." : "Place Bet"}
+          {busy ? busyLabel : "Place Bet"}
         </button>
       </div>
     </div>

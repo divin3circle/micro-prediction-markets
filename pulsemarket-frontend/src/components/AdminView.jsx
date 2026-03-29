@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { UserDisplay } from "./UserDisplay";
 
 export function AdminView({
   isAdmin,
   allMarkets,
+  oracleAddress,
   onCreateMarket,
   onCloseMarket,
   onResolve,
@@ -43,6 +45,10 @@ export function AdminView({
   return (
     <div className="space-y-6">
       <section className="rounded-2xl bg-[#16161A] p-4">
+        <div className="mb-3 flex items-center justify-between text-xs text-[#A1A1B0]">
+          <span>Oracle</span>
+          <UserDisplay address={oracleAddress} className="text-[#E5E7EB]" />
+        </div>
         <h2 className="mb-3 text-base font-semibold text-white">
           Create Market
         </h2>

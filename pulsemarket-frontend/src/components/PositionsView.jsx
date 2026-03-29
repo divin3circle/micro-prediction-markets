@@ -1,3 +1,5 @@
+import { UserDisplay } from "./UserDisplay";
+
 function statusLabel(market) {
   if (market.status === 0)
     return { text: "Open", cls: "bg-[#7C5CFC] text-white" };
@@ -19,6 +21,7 @@ export function PositionsView({
   onClaimWin,
   onClaimRefund,
   loading,
+  currentAddress,
 }) {
   if (loading) return <p className="text-[#A1A1B0]">Loading positions...</p>;
   if (!positions.length) {
@@ -27,6 +30,12 @@ export function PositionsView({
 
   return (
     <div className="space-y-3">
+      {currentAddress && (
+        <div className="rounded-xl bg-[#101015] px-3 py-2 text-xs text-[#A1A1B0]">
+          Account:{" "}
+          <UserDisplay address={currentAddress} className="text-[#E5E7EB]" />
+        </div>
+      )}
       {positions.map(({ market, position }) => {
         const status = statusLabel(market);
         const isWinner =

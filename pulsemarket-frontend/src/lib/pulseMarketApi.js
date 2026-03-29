@@ -42,6 +42,28 @@ export async function getMarketCount() {
   return Number(parseViewData(res));
 }
 
+export async function getOracleAddress() {
+  const res = await rest.move.view(
+    MODULE_ADDRESS,
+    MODULE_NAME,
+    "get_oracle",
+    [],
+    [],
+  );
+  return parseViewData(res);
+}
+
+export async function getCreationFee() {
+  const res = await rest.move.view(
+    MODULE_ADDRESS,
+    MODULE_NAME,
+    "get_creation_fee",
+    [],
+    [],
+  );
+  return Number(parseViewData(res));
+}
+
 export async function getActiveMarketIds() {
   const res = await rest.move.view(
     MODULE_ADDRESS,
@@ -81,49 +103,60 @@ export async function getUserPosition(marketId, userAddress) {
   };
 }
 
+export async function getNativeBalance(userAddress) {
+  const url = `${LCD_URL}/cosmos/bank/v1beta1/balances/${userAddress}/by_denom?denom=${FEE_DENOM}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error("Failed to fetch balance");
+  }
+  const json = await res.json();
+  return Number(json?.balance?.amount || 0);
+}
+
 export function usePulseMarketTx() {
-  const { initiaAddress, requestTxSync, autoSign } = useInterwovenKit();
+  const { initiaAddress, requestTxSync } = useInterwovenKit();
 
   const execute = useMemo(
-    () => async (functionName, args) => {
-      if (!initiaAddress) {
-        throw new Error("Connect wallet first");
-      }
+    () =>
+      async (functionName, args, options = {}) => {
+        if (!initiaAddress) {
+          throw new Error("Connect wallet first");
+        }
 
-      const enabled = autoSign?.isEnabledByChain?.[CHAIN_ID];
-      if (!enabled) {
-        await autoSign?.enable(CHAIN_ID, {
-          permissions: ["/initia.move.v1.MsgExecute"],
-        });
-      }
+        const { useAutoSign = false } = options;
 
-      return requestTxSync({
-        chainId: CHAIN_ID,
-        autoSign: true,
-        feeDenom: FEE_DENOM,
-        messages: [
-          {
-            typeUrl: "/initia.move.v1.MsgExecute",
-            value: {
-              sender: initiaAddress,
-              moduleAddress: MODULE_ADDRESS,
-              moduleName: MODULE_NAME,
-              functionName,
-              typeArgs: [],
-              args,
+        return requestTxSync({
+          chainId: CHAIN_ID,
+          ...(useAutoSign ? { autoSign: true, feeDenom: FEE_DENOM } : {}),
+          messages: [
+            {
+              typeUrl: "/initia.move.v1.MsgExecute",
+              value: {
+                sender: initiaAddress,
+                moduleAddress: MODULE_ADDRESS,
+                moduleName: MODULE_NAME,
+                functionName,
+                typeArgs: [],
+                args,
+              },
             },
-          },
-        ],
-      });
-    },
-    [autoSign, initiaAddress, requestTxSync],
+          ],
+        });
+      },
+    [initiaAddress, requestTxSync],
   );
 
   return {
     placeBet: ({ marketId, betYes, amount }) =>
-      execute("place_bet", [bcsU64(marketId), bcsBool(betYes), bcsU64(amount)]),
-    claimWinnings: (marketId) => execute("claim_winnings", [bcsU64(marketId)]),
-    claimRefund: (marketId) => execute("claim_refund", [bcsU64(marketId)]),
+      execute(
+        "place_bet",
+        [bcsU64(marketId), bcsBool(betYes), bcsU64(amount)],
+        { useAutoSign: true },
+      ),
+    claimWinnings: (marketId) =>
+      execute("claim_winnings", [bcsU64(marketId)], { useAutoSign: true }),
+    claimRefund: (marketId) =>
+      execute("claim_refund", [bcsU64(marketId)], { useAutoSign: true }),
     createMarket: ({ question, category, closeTime, resolveTime }) =>
       execute("create_market", [
         bcsString(question),

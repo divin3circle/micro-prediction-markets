@@ -34,6 +34,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <QueryClientProvider client={queryClient}>
         <InterwovenKitProvider
           {...TESTNET}
+          enableAutoSign={true}
           defaultChainId={customChain.chain_id}
           customChain={customChain}
           customChains={[customChain]}

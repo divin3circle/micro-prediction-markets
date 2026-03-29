@@ -14,6 +14,7 @@ module pulse_market::pulse_market_tests {
         timestamp::set_time_has_started_for_testing(publisher);
         timestamp::update_global_time_for_test_secs(BASE_TIME);
         pulse_market::init_for_test(publisher);
+        fund(signer::address_of(publisher));
     }
 
     fun fund(addr: address) {
@@ -222,9 +223,9 @@ module pulse_market::pulse_market_tests {
     }
 
     #[test(publisher = @pulse_market, attacker = @0x44)]
-    #[expected_failure]
-    fun test_non_oracle_blocked(publisher: signer, attacker: signer) {
+    fun test_permissionless_market_creation(publisher: signer, attacker: signer) {
         setup(&publisher);
+        fund(signer::address_of(&attacker));
         pulse_market::create_market(
             &attacker,
             string::utf8(b"Unauthorized"),
@@ -232,6 +233,27 @@ module pulse_market::pulse_market_tests {
             BASE_TIME + 5,
             BASE_TIME + 8,
         );
+
+        assert!(pulse_market::get_market_count() == 1, 40);
+    }
+
+    #[test(publisher = @pulse_market, attacker = @0x45)]
+    #[expected_failure]
+    fun test_non_oracle_cannot_resolve(publisher: signer, attacker: signer) {
+        setup(&publisher);
+        fund(signer::address_of(&attacker));
+
+        pulse_market::create_market(
+            &attacker,
+            string::utf8(b"Resolve guard"),
+            string::utf8(b"crypto"),
+            BASE_TIME + 5,
+            BASE_TIME + 8,
+        );
+        timestamp::update_global_time_for_test_secs(BASE_TIME + 6);
+        pulse_market::close_market(&attacker, 0);
+        timestamp::update_global_time_for_test_secs(BASE_TIME + 9);
+        pulse_market::resolve_market(&attacker, 0, true);
     }
 
     #[test(publisher = @pulse_market, user_a = @0x51)]

@@ -8,15 +8,39 @@ import { BetModal } from "./components/BetModal";
 import { Toast } from "./components/Toast";
 import { PositionsView } from "./components/PositionsView";
 import { AdminView } from "./components/AdminView";
-import { ORACLE_ADDRESS } from "./config/chain";
+import { CreateMarketView } from "./components/CreateMarketView";
+import { BridgeModal } from "./components/BridgeModal";
+import {
+  CHAIN_ID,
+  FEE_DENOM,
+  L1_CHAIN_ID,
+  ORACLE_ADDRESS,
+} from "./config/chain";
 import { usePulseMarkets, useUserPositions } from "./hooks/usePulseMarkets";
 import {
+  AutoSignSessionProvider,
+  useAutoSignSession,
+} from "./context/AutoSignSessionContext";
+import {
+  getCreationFee,
   getMarket,
   getMarketCount,
+  getNativeBalance,
+  getOracleAddress,
   usePulseMarketTx,
 } from "./lib/pulseMarketApi";
 
-function MarketsPage({ onOpenBet, markets, loading, error, onRefresh }) {
+function MarketsPage({
+  onOpenBet,
+  markets,
+  loading,
+  error,
+  onRefresh,
+  isConnected,
+  balanceMicro,
+  balanceLoading,
+  onOpenDeposit,
+}) {
   const [category, setCategory] = useState("All");
   const filtered = useMemo(
     () =>
@@ -33,6 +57,20 @@ function MarketsPage({ onOpenBet, markets, loading, error, onRefresh }) {
       {error && (
         <div className="mb-4 rounded-xl border border-[#7F1D1D] bg-[#2A1212] p-3 text-sm text-[#FECACA]">
           {error}
+        </div>
+      )}
+      {isConnected && !balanceLoading && balanceMicro === 0 && (
+        <div className="mb-4 rounded-xl border border-[#3B2C0F] bg-[#2A1D08] px-4 py-3 text-sm text-[#FDE68A]">
+          <span>
+            You have no INIT on micro-markets. Deposit to start betting.{" "}
+          </span>
+          <button
+            type="button"
+            onClick={onOpenDeposit}
+            className="font-semibold text-[#FACC15] underline-offset-2 hover:underline"
+          >
+            {"Deposit now ->"}
+          </button>
         </div>
       )}
       {!loading && !filtered.length && (
@@ -55,8 +93,23 @@ function MarketsPage({ onOpenBet, markets, loading, error, onRefresh }) {
 }
 
 function App() {
+  return (
+    <AutoSignSessionProvider>
+      <AppShell />
+    </AutoSignSessionProvider>
+  );
+}
+
+function AppShell() {
   const navigate = useNavigate();
   const { initiaAddress, openConnect } = useInterwovenKit();
+  const {
+    sessionActive,
+    initializeSession,
+    clearSession,
+    isInitializing,
+    isSessionExpiredError,
+  } = useAutoSignSession();
   const tx = usePulseMarketTx();
   const { markets, loading, error, refresh } = usePulseMarkets();
   const {
@@ -71,6 +124,13 @@ function App() {
     side: true,
   });
   const [toast, setToast] = useState("");
+  const [oracleAddress, setOracleAddress] = useState(ORACLE_ADDRESS || "");
+  const [creationFee, setCreationFee] = useState(100_000);
+  const [balanceMicro, setBalanceMicro] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [hasLoadedBalance, setHasLoadedBalance] = useState(false);
+  const [bridgeOpen, setBridgeOpen] = useState(false);
+  const [bridgeStartBalance, setBridgeStartBalance] = useState(null);
 
   const setFlash = useCallback((message) => {
     setToast(message);
@@ -78,9 +138,9 @@ function App() {
   }, []);
 
   const isAdmin = useMemo(() => {
-    if (!initiaAddress || !ORACLE_ADDRESS) return false;
-    return initiaAddress.toLowerCase() === ORACLE_ADDRESS.toLowerCase();
-  }, [initiaAddress]);
+    if (!initiaAddress || !oracleAddress) return false;
+    return initiaAddress.toLowerCase() === oracleAddress.toLowerCase();
+  }, [initiaAddress, oracleAddress]);
 
   const openBet = useCallback(
     (market, side) => {
@@ -99,18 +159,42 @@ function App() {
   );
 
   const runAndSync = useCallback(
-    async (runner, successMessage) => {
+    async (
+      runner,
+      successMessage,
+      options = { requiresAutoSign: false, skipAutoSignInit: false },
+    ) => {
+      const { requiresAutoSign = false, skipAutoSignInit = false } = options;
       try {
+        if (requiresAutoSign && !skipAutoSignInit && !sessionActive) {
+          setFlash(
+            "Allow PulseMarket to place bets on your behalf during this session",
+          );
+          await initializeSession();
+        }
         await runner();
         await Promise.all([refresh(), refreshPositions()]);
         setFlash(successMessage);
         return true;
       } catch (e) {
+        if (requiresAutoSign && isSessionExpiredError(e)) {
+          await clearSession();
+          setFlash("Session expired — tap ⚡ to re-enable auto-signing");
+          return false;
+        }
         setFlash(e?.message || "Transaction failed");
         return false;
       }
     },
-    [refresh, refreshPositions, setFlash],
+    [
+      clearSession,
+      initializeSession,
+      isSessionExpiredError,
+      refresh,
+      refreshPositions,
+      sessionActive,
+      setFlash,
+    ],
   );
 
   const fetchAllMarkets = useCallback(async () => {
@@ -132,16 +216,137 @@ function App() {
     }
   }, [adminMarkets.length, refreshAdmin]);
 
+  const refreshBalance = useCallback(
+    async (showSkeleton = false) => {
+      if (!initiaAddress) {
+        setBalanceMicro(null);
+        setBalanceLoading(false);
+        return null;
+      }
+      if (showSkeleton && !hasLoadedBalance) {
+        setBalanceLoading(true);
+      }
+      try {
+        const next = await getNativeBalance(initiaAddress);
+        setBalanceMicro(next);
+        setHasLoadedBalance(true);
+        return next;
+      } catch {
+        return null;
+      } finally {
+        setBalanceLoading(false);
+      }
+    },
+    [hasLoadedBalance, initiaAddress],
+  );
+
+  const openDepositBridge = useCallback(async () => {
+    if (!initiaAddress) {
+      openConnect?.();
+      return;
+    }
+    const baseline = await refreshBalance(true);
+    setBridgeStartBalance(typeof baseline === "number" ? baseline : 0);
+    setBridgeOpen(true);
+  }, [initiaAddress, openConnect, refreshBalance]);
+
   useEffect(() => {
     if (isAdmin) {
       refreshAdmin().catch(() => {});
     }
   }, [isAdmin, refreshAdmin]);
 
+  useEffect(() => {
+    let mounted = true;
+    const loadConfig = async () => {
+      try {
+        const [oracle, fee] = await Promise.all([
+          getOracleAddress(),
+          getCreationFee(),
+        ]);
+        if (!mounted) return;
+        setOracleAddress(oracle || ORACLE_ADDRESS || "");
+        setCreationFee(Number.isFinite(fee) ? fee : 100_000);
+      } catch {
+        if (!mounted) return;
+        setOracleAddress(ORACLE_ADDRESS || "");
+      }
+    };
+    loadConfig();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!initiaAddress) {
+      setBalanceMicro(null);
+      setHasLoadedBalance(false);
+      return;
+    }
+
+    refreshBalance(true);
+    const timer = setInterval(() => {
+      refreshBalance(false);
+    }, 30000);
+
+    return () => clearInterval(timer);
+  }, [initiaAddress, refreshBalance]);
+
+  useEffect(() => {
+    if (!bridgeOpen || !initiaAddress) return;
+
+    const timer = setInterval(async () => {
+      const next = await refreshBalance(false);
+      if (
+        typeof next === "number" &&
+        typeof bridgeStartBalance === "number" &&
+        next > bridgeStartBalance
+      ) {
+        setBridgeOpen(false);
+        setBridgeStartBalance(next);
+        setFlash("Deposit confirmed — you're ready to bet!");
+      }
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, [bridgeOpen, bridgeStartBalance, initiaAddress, refreshBalance, setFlash]);
+
+  const bridgeDefaults = useMemo(
+    () => ({
+      srcChainId: L1_CHAIN_ID,
+      srcDenom: "uinit",
+      dstChainId: CHAIN_ID,
+      dstDenom: FEE_DENOM,
+    }),
+    [],
+  );
+
   return (
     <div className="relative min-h-screen overflow-x-hidden">
       <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(124,92,252,0.22),transparent_48%),radial-gradient(circle_at_bottom_right,_rgba(34,197,94,0.12),transparent_52%),linear-gradient(180deg,#0A0A0E_0%,#050507_100%)]" />
-      <TopNav />
+      <TopNav
+        autoSignActive={sessionActive}
+        autoSignLoading={isInitializing}
+        onOpenDeposit={openDepositBridge}
+        balanceMicro={balanceMicro}
+        balanceLoading={balanceLoading && !hasLoadedBalance}
+        onEnableAutoSign={async () => {
+          if (!initiaAddress) {
+            openConnect?.();
+            return;
+          }
+          try {
+            setFlash(
+              "Allow PulseMarket to place bets on your behalf during this session",
+            );
+            await initializeSession();
+            setFlash("Auto-signing active");
+          } catch (e) {
+            setFlash(e?.message || "Failed to enable auto-signing");
+          }
+        }}
+      />
       <Toast message={toast} />
 
       <main className="mx-auto w-full max-w-[980px] px-4 pb-24 pt-6">
@@ -155,6 +360,10 @@ function App() {
                 loading={loading}
                 error={error}
                 onRefresh={refresh}
+                isConnected={Boolean(initiaAddress)}
+                balanceMicro={balanceMicro}
+                balanceLoading={balanceLoading}
+                onOpenDeposit={openDepositBridge}
               />
             }
           />
@@ -164,14 +373,18 @@ function App() {
               <PositionsView
                 positions={positions}
                 loading={loadingPositions}
+                currentAddress={initiaAddress}
                 onClaimWin={(id) =>
                   runAndSync(
                     () => tx.claimWinnings(id),
                     "Winnings claimed successfully",
+                    { requiresAutoSign: true },
                   )
                 }
                 onClaimRefund={(id) =>
-                  runAndSync(() => tx.claimRefund(id), "Refund claimed")
+                  runAndSync(() => tx.claimRefund(id), "Refund claimed", {
+                    requiresAutoSign: true,
+                  })
                 }
               />
             }
@@ -182,10 +395,12 @@ function App() {
               <AdminView
                 isAdmin={isAdmin}
                 allMarkets={adminMarkets}
+                oracleAddress={oracleAddress}
                 onCreateMarket={async (payload) => {
                   const ok = await runAndSync(
                     () => tx.createMarket(payload),
                     "Market created",
+                    { requiresAutoSign: false },
                   );
                   if (ok) {
                     await refreshAdmin();
@@ -195,6 +410,7 @@ function App() {
                   const ok = await runAndSync(
                     () => tx.closeMarket(marketId),
                     `Market #${marketId} closed`,
+                    { requiresAutoSign: false },
                   );
                   if (ok) {
                     await refreshAdmin();
@@ -204,9 +420,31 @@ function App() {
                   const ok = await runAndSync(
                     () => tx.resolveMarket({ marketId, yesWon }),
                     `Market #${marketId} resolved`,
+                    { requiresAutoSign: false },
                   );
                   if (ok) {
                     await refreshAdmin();
+                  }
+                }}
+              />
+            }
+          />
+          <Route
+            path="/create"
+            element={
+              <CreateMarketView
+                initiaAddress={initiaAddress}
+                creationFee={creationFee}
+                onConnect={openConnect}
+                onCreateMarket={async (payload) => {
+                  const ok = await runAndSync(
+                    () => tx.createMarket(payload),
+                    "Market created",
+                    { requiresAutoSign: false },
+                  );
+                  if (ok) {
+                    await refreshAdmin();
+                    navigate("/");
                   }
                 }}
               />
@@ -233,10 +471,29 @@ function App() {
         open={betState.open}
         market={betState.market}
         initialSide={betState.side}
+        connectedAddress={initiaAddress}
         onClose={closeBet}
         onPlace={async (payload) => {
-          await runAndSync(() => tx.placeBet(payload), "Bet placed");
+          const { onAutoSignStart, onTxStart, ...txPayload } = payload;
+          if (!sessionActive) {
+            onAutoSignStart?.();
+            setFlash(
+              "Allow PulseMarket to place bets on your behalf during this session",
+            );
+            await initializeSession();
+          }
+          onTxStart?.();
+          await runAndSync(() => tx.placeBet(txPayload), "Bet placed", {
+            requiresAutoSign: true,
+            skipAutoSignInit: true,
+          });
         }}
+      />
+
+      <BridgeModal
+        open={bridgeOpen}
+        onClose={() => setBridgeOpen(false)}
+        bridgeDefaults={bridgeDefaults}
       />
     </div>
   );

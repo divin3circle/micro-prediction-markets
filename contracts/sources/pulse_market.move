@@ -21,6 +21,7 @@ module pulse_market::pulse_market {
     const OUTCOME_NO: u8 = 2;
 
     const MAX_FEE_BPS: u64 = 1000;
+    const CREATE_MARKET_FEE: u64 = 100_000;
 
     const E_NOT_ORACLE: u64 = 1;
     const E_MARKET_NOT_OPEN: u64 = 2;
@@ -128,15 +129,21 @@ module pulse_market::pulse_market {
     }
 
     public entry fun create_market(
-        oracle: &signer,
+        creator: &signer,
         question: String,
         category: String,
         close_time: u64,
         resolve_time: u64,
     ) acquires MarketStore {
         let store = borrow_global_mut<MarketStore>(@pulse_market);
-        let oracle_addr = signer::address_of(oracle);
-        assert!(oracle_addr == store.oracle, E_NOT_ORACLE);
+        if (CREATE_MARKET_FEE > 0) {
+            primary_fungible_store::transfer(
+                creator,
+                native_metadata(),
+                store.fee_recipient,
+                CREATE_MARKET_FEE,
+            );
+        };
 
         let now = timestamp::now_seconds();
         assert!(close_time > now, E_CLOSE_TIME_PAST);
@@ -400,6 +407,16 @@ module pulse_market::pulse_market {
     #[view]
     public fun get_market_count(): u64 acquires MarketStore {
         borrow_global<MarketStore>(@pulse_market).market_count
+    }
+
+    #[view]
+    public fun get_oracle(): address acquires MarketStore {
+        borrow_global<MarketStore>(@pulse_market).oracle
+    }
+
+    #[view]
+    public fun get_creation_fee(): u64 {
+        CREATE_MARKET_FEE
     }
 
     #[view]
