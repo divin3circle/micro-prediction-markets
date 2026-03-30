@@ -113,15 +113,28 @@ app.post("/api/resolve/:id", requireAdmin, async (req, res) => {
 
 /** Validate a market question before creating */
 app.post("/api/validate-question", async (req, res) => {
-  const { question } = req.body;
+  const { question, closeTime, resolveTime } = req.body;
   if (!question?.trim()) {
     return res.status(400).json({ error: "question is required" });
   }
+  if (!Number.isFinite(closeTime) || !Number.isFinite(resolveTime)) {
+    return res
+      .status(400)
+      .json({ error: "closeTime and resolveTime (unix seconds) are required" });
+  }
   try {
-    const result = await validateMarketQuestion(question);
+    const result = await validateMarketQuestion({
+      question,
+      closeTime,
+      resolveTime,
+    });
     res.json(result);
   } catch (err) {
-    logError("[server] /api/validate-question failed", err, { question });
+    logError("[server] /api/validate-question failed", err, {
+      question,
+      closeTime,
+      resolveTime,
+    });
     res.status(500).json({ error: err.message });
   }
 });

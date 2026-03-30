@@ -16,6 +16,34 @@ function toInit(v) {
   });
 }
 
+function calculatePotentialPayout(market, position) {
+  const feeBps = 200; // 2%
+  const totalPool = market.totalYesAmount + market.totalNoAmount;
+  if (totalPool === 0) return 0;
+
+  // Calculate fee and net pool
+  const fee = Math.floor((totalPool * feeBps) / 10000);
+  const netPool = totalPool - fee;
+
+  let potentialPayout = 0;
+
+  // If they have YES position and YES wins
+  if (position.yesAmount > 0 && market.totalYesAmount > 0) {
+    potentialPayout = Math.floor(
+      (netPool * position.yesAmount) / market.totalYesAmount
+    );
+  }
+
+  // If they have NO position and NO wins
+  if (position.noAmount > 0 && market.totalNoAmount > 0) {
+    potentialPayout = Math.floor(
+      (netPool * position.noAmount) / market.totalNoAmount
+    );
+  }
+
+  return potentialPayout;
+}
+
 export function PositionsView({
   positions,
   onClaimWin,
@@ -36,7 +64,7 @@ export function PositionsView({
           <UserDisplay address={currentAddress} className="text-[#E5E7EB]" />
         </div>
       )}
-      {positions.map(({ market, position }) => {
+      {positions.reverse().map(({ market, position }) => {
         const status = statusLabel(market);
         const isWinner =
           (market.outcome === 1 && position.yesAmount > 0) ||
@@ -45,6 +73,11 @@ export function PositionsView({
           market.status === 2 &&
           ((market.outcome === 1 && market.totalYesAmount === 0) ||
             (market.outcome === 2 && market.totalNoAmount === 0));
+        
+        const potentialPayout = calculatePotentialPayout(market, position);
+        const totalBet = position.yesAmount + position.noAmount;
+        const profitLoss = potentialPayout - totalBet;
+        const profitColor = profitLoss >= 0 ? "text-[#22C55E]" : "text-[#EF4444]";
 
         return (
           <div
@@ -68,6 +101,29 @@ export function PositionsView({
                 NO: {toInit(position.noAmount)} INIT
               </p>
             </div>
+
+            {(market.status === 0 || market.status === 1) && !position.claimed && (
+              <div className="mb-3 rounded-xl border border-[#2A2A35] bg-[#0D0D0F] px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-[#6B7280]">
+                      Potential payout
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      {toInit(potentialPayout)} INIT
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-wide text-[#6B7280]">
+                      P&L
+                    </p>
+                    <p className={`mt-1 text-sm font-semibold ${profitColor}`}>
+                      {profitLoss >= 0 ? "+" : ""}{toInit(profitLoss)} INIT
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {market.status === 2 && !position.claimed && isWinner && (
               <button

@@ -1,4 +1,9 @@
-import { RESTClient, MnemonicKey, LCDClient, MsgExecute } from "@initia/initia.js";
+import {
+  RESTClient,
+  MnemonicKey,
+  LCDClient,
+  MsgExecute,
+} from "@initia/initia.js";
 import "dotenv/config";
 
 export const CHAIN_ID = process.env.CHAIN_ID || "micro-markets";
@@ -6,7 +11,11 @@ export const LCD_URL = process.env.LCD_URL || "http://localhost:1317";
 export const MODULE_ADDRESS = process.env.MODULE_ADDRESS;
 export const MODULE_NAME = process.env.MODULE_NAME || "pulse_market";
 export const FEE_DENOM = process.env.FEE_DENOM || "umin";
-export const TENDERMINT_RPC_URL = process.env.TENDERMINT_RPC_URL || "http://localhost:26657";
+export const TENDERMINT_RPC_URL =
+  process.env.TENDERMINT_RPC_URL || "http://localhost:26657";
+export const ORACLE_COIN_TYPE = Number(process.env.ORACLE_COIN_TYPE || "60");
+export const ORACLE_ETH_DERIVATION =
+  (process.env.ORACLE_ETH_DERIVATION || "true") === "true";
 
 if (!MODULE_ADDRESS) {
   throw new Error("MODULE_ADDRESS is required in .env");
@@ -27,7 +36,11 @@ export function getOracleWallet() {
   if (!mnemonic) {
     throw new Error("ORACLE_MNEMONIC is required in .env");
   }
-  const key = new MnemonicKey({ mnemonic });
+  const key = new MnemonicKey({
+    mnemonic,
+    coinType: ORACLE_COIN_TYPE,
+    eth: ORACLE_ETH_DERIVATION,
+  });
   return lcd.wallet(key);
 }
 

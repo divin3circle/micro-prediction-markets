@@ -1,5 +1,16 @@
 import { useState, useCallback } from "react";
 import { agentApi } from "../lib/agentApi";
+import {
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerBody,
+  DrawerFooter,
+  DrawerClose,
+} from "./ui/drawer";
 
 function formatInit(micro) {
   return (micro / 1_000_000).toLocaleString(undefined, {
@@ -21,31 +32,11 @@ const GATE_OK = "ok";
 const GATE_WARN = "warn";
 const GATE_FAIL = "fail";
 
-function AIGateBadge({ state, reason }) {
-  if (state === GATE_IDLE) return null;
-  if (state === GATE_CHECKING) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-[#2A2A35] bg-[#0D0D0F] px-4 py-3 text-sm text-[#A1A1B0]">
-        <span className="animate-spin text-base">⏳</span>
-        Checking with AI…
-      </div>
-    );
-  }
-  const cfg = {
-    [GATE_OK]:   { icon: "✅", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" },
-    [GATE_WARN]: { icon: "⚠️", cls: "border-amber-500/40 bg-amber-500/10 text-amber-300" },
-    [GATE_FAIL]: { icon: "❌", cls: "border-red-500/40 bg-red-500/10 text-red-400" },
-  }[state] ?? { icon: "ℹ️", cls: "border-[#2A2A35] bg-[#0D0D0F] text-[#A1A1B0]" };
-
-  return (
-    <div className={`rounded-lg border px-4 py-3 text-sm ${cfg.cls}`}>
-      <span className="mr-2">{cfg.icon}</span>
-      {reason}
-    </div>
-  );
+function parseDateTimeToSec(dateTimeLocal) {
+  return Math.floor(new Date(dateTimeLocal).getTime() / 1000);
 }
 
-export function CreateMarketView({
+export default function CreateMarketView({
   initiaAddress,
   creationFee,
   onConnect,
@@ -59,18 +50,33 @@ export function CreateMarketView({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // AI gate
   const [gateState, setGateState] = useState(GATE_IDLE); // idle | checking | ok | warn | fail
   const [gateReason, setGateReason] = useState("");
 
-  /** Reset gate when question changes */
-  const handleQuestionChange = (e) => {
-    setForm((f) => ({ ...f, question: e.target.value }));
+  function resetGateIfNeeded() {
     if (gateState !== GATE_IDLE) {
       setGateState(GATE_IDLE);
       setGateReason("");
     }
+  }
+
+  /** Reset AI gate whenever question/timing changes */
+  const handleQuestionChange = (e) => {
+    setForm((f) => ({ ...f, question: e.target.value }));
+    resetGateIfNeeded();
+  };
+
+  const handleCloseChange = (e) => {
+    setForm((f) => ({ ...f, close: e.target.value }));
+    resetGateIfNeeded();
+  };
+
+  const handleResolveChange = (e) => {
+    setForm((f) => ({ ...f, resolve: e.target.value }));
+    resetGateIfNeeded();
   };
 
   const checkWithAI = useCallback(async () => {
@@ -78,10 +84,38 @@ export function CreateMarketView({
       setError("Enter a question before checking with AI.");
       return;
     }
+    if (!form.close) {
+      setError("Select a close time before checking with AI.");
+      return;
+    }
+    if (!form.resolve) {
+      setError("Select a resolve time before checking with AI.");
+      return;
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const closeTs = parseDateTimeToSec(form.close);
+    const resolveTs = parseDateTimeToSec(form.resolve);
+
+    if (closeTs <= nowSec + 30) {
+      setError("Close time must be at least 30 seconds in the future.");
+      return;
+    }
+    if (resolveTs < closeTs) {
+      setError("Resolve time must be on or after close time.");
+      return;
+    }
+
+    setError("");
     setGateState(GATE_CHECKING);
     setGateReason("");
+    setDrawerOpen(true);
     try {
-      const result = await agentApi.validateQuestion(form.question.trim());
+      const result = await agentApi.validateQuestion(
+        form.question.trim(),
+        closeTs,
+        resolveTs,
+      );
       if (result.ok === true) {
         setGateState(GATE_OK);
         setGateReason(result.reason ?? "Question looks good!");
@@ -89,15 +123,14 @@ export function CreateMarketView({
         setGateState(GATE_FAIL);
         setGateReason(result.reason ?? "AI considers this question unsuitable.");
       } else {
-        // Agent offline or unknown response
-        setGateState(GATE_WARN);
-        setGateReason("Agent offline — AI check skipped. You can still submit.");
+        setGateState(GATE_FAIL);
+        setGateReason("AI check returned an unknown result. Please retry.");
       }
-    } catch {
-      setGateState(GATE_WARN);
-      setGateReason("Could not reach the AI agent — check skipped. You can still submit.");
+    } catch (err) {
+      setGateState(GATE_FAIL);
+      setGateReason(err?.message || "Could not reach the AI agent. Validation is required before create.");
     }
-  }, [form.question]);
+  }, [form.question, form.close, form.resolve]);
 
   const create = async () => {
     if (!initiaAddress) {
@@ -111,8 +144,8 @@ export function CreateMarketView({
     if (!form.resolve)         { setError("Resolve time is required."); return; }
 
     const nowSec    = Math.floor(Date.now() / 1000);
-    const closeTs   = Math.floor(new Date(form.close).getTime() / 1000);
-    const resolveTs = Math.floor(new Date(form.resolve).getTime() / 1000);
+    const closeTs = parseDateTimeToSec(form.close);
+    const resolveTs = parseDateTimeToSec(form.resolve);
 
     if (closeTs <= nowSec + 30) {
       setError("Close time must be at least 30 seconds in the future.");
@@ -123,9 +156,8 @@ export function CreateMarketView({
       return;
     }
 
-    // Soft-block if AI explicitly rejected the question
-    if (gateState === GATE_FAIL) {
-      setError("AI flagged this question as unsuitable. Please revise or run the check again.");
+    if (gateState !== GATE_OK) {
+      setError("Run AI Check and get approval before creating this market.");
       return;
     }
 
@@ -171,27 +203,17 @@ export function CreateMarketView({
       )}
 
       <div className="grid gap-3">
-        {/* Question + AI gate */}
-        <div className="flex gap-2">
+        {/* Question input */}
+        <div>
           <input
-            className="flex-1 rounded-lg bg-[#0D0D0F] px-3 py-2 text-sm text-white"
+            className="w-full rounded-lg bg-[#0D0D0F] px-3 py-2 text-sm text-white"
             placeholder="Question (for example: Will BTC close above 120k this week?)"
             value={form.question}
             onChange={handleQuestionChange}
           />
-          <button
-            type="button"
-            onClick={checkWithAI}
-            disabled={gateState === GATE_CHECKING}
-            title="Validate question with AI"
-            className="shrink-0 rounded-lg bg-[#1e1e24] px-3 py-2 text-xs text-[#A1A1B0] hover:text-white disabled:opacity-50"
-          >
-            {gateState === GATE_CHECKING ? "…" : "🤖 AI Check"}
-          </button>
         </div>
 
-        <AIGateBadge state={gateState} reason={gateReason} />
-
+        {/* Category selector */}
         <select
           className="rounded-lg bg-[#0D0D0F] px-3 py-2 text-sm text-white"
           value={form.category}
@@ -201,34 +223,172 @@ export function CreateMarketView({
           <option value="crypto">crypto</option>
           <option value="news">news</option>
         </select>
+
+        {/* Close time */}
         <label className="text-xs text-[#9CA3AF]">Close time (must be in the future)</label>
         <input
           type="datetime-local"
           min={minDateTime}
           className="rounded-lg bg-[#0D0D0F] px-3 py-2 text-sm text-white"
           value={form.close}
-          onChange={(e) => setForm((f) => ({ ...f, close: e.target.value }))}
+          onChange={handleCloseChange}
         />
+
+        {/* Resolve time */}
         <label className="text-xs text-[#9CA3AF]">Resolve time (on or after close time)</label>
         <input
           type="datetime-local"
           min={form.close || minDateTime}
           className="rounded-lg bg-[#0D0D0F] px-3 py-2 text-sm text-white"
           value={form.resolve}
-          onChange={(e) => setForm((f) => ({ ...f, resolve: e.target.value }))}
+          onChange={handleResolveChange}
         />
-        <button
-          type="button"
-          onClick={create}
-          disabled={busy || gateState === GATE_CHECKING}
-          className="mt-2 rounded-xl bg-[#7C5CFC] px-4 py-2 text-sm text-white disabled:opacity-50"
-        >
-          {busy
-            ? "Submitting..."
-            : initiaAddress
-              ? `Create Market (${formatInit(creationFee)} INIT fee)`
-              : "Connect Wallet to Create"}
-        </button>
+
+        <p className="text-xs text-[#6B7280]">
+          AI will validate your question against the close and resolve times.
+          Markets that are likely unresolvable by resolve time will be blocked.
+        </p>
+
+        {/* Validate button (opens drawer) */}
+        <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <DrawerTrigger asChild>
+            <button
+              type="button"
+              onClick={checkWithAI}
+              disabled={!form.question.trim() || !form.close || !form.resolve || gateState === GATE_CHECKING}
+              className="mt-2 rounded-xl bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {gateState === GATE_CHECKING ? "Validating..." : "Validate"}
+            </button>
+          </DrawerTrigger>
+
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle>Market Validation</DrawerTitle>
+              <DrawerDescription>
+                AI is analyzing your market question
+              </DrawerDescription>
+            </DrawerHeader>
+
+            <DrawerBody>
+              {gateState === GATE_CHECKING && (
+                <div className="flex flex-col items-center justify-center gap-3 py-6">
+                  <div className="animate-spin text-3xl">⏳</div>
+                  <p className="text-sm text-[#A1A1B0]">Checking with AI…</p>
+                </div>
+              )}
+
+              {gateState === GATE_OK && (
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3">
+                    <p className="flex items-center gap-2 text-sm text-emerald-300">
+                      <span className="text-lg">✅</span>
+                      <span className="font-semibold">Validation Passed</span>
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-[#0D0D0F] px-4 py-3">
+                    <p className="text-sm text-[#A1A1B0]">{gateReason}</p>
+                  </div>
+                  <div className="rounded-lg border border-[#2A2A35] bg-[#16161A] px-4 py-3">
+                    <p className="text-xs text-[#6B7280] mb-2 font-semibold">Market Details:</p>
+                    <div className="space-y-2 text-xs text-[#A1A1B0]">
+                      <p>
+                        <span className="text-[#6B7280]">Question:</span> {form.question}
+                      </p>
+                      <p>
+                        <span className="text-[#6B7280]">Category:</span> {form.category}
+                      </p>
+                      <p>
+                        <span className="text-[#6B7280]">Close:</span>{" "}
+                        {new Date(parseDateTimeToSec(form.close) * 1000).toLocaleString()}
+                      </p>
+                      <p>
+                        <span className="text-[#6B7280]">Resolve:</span>{" "}
+                        {new Date(parseDateTimeToSec(form.resolve) * 1000).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {gateState === GATE_FAIL && (
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3">
+                    <p className="flex items-center gap-2 text-sm text-red-400">
+                      <span className="text-lg">❌</span>
+                      <span className="font-semibold">Validation Failed</span>
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-[#0D0D0F] px-4 py-3">
+                    <p className="text-sm text-red-300">{gateReason}</p>
+                  </div>
+                  <p className="text-xs text-[#6B7280]">
+                    Please review your question and timing, then try again.
+                  </p>
+                </div>
+              )}
+            </DrawerBody>
+
+            <DrawerFooter>
+              {gateState === GATE_OK && (
+                <>
+                  <DrawerClose asChild>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[#2A2A35] bg-[#1e1e24] px-4 py-2 text-sm text-[#A1A1B0] hover:text-white"
+                    >
+                      Back
+                    </button>
+                  </DrawerClose>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDrawerOpen(false);
+                    }}
+                    className="rounded-lg bg-[#7C5CFC] px-4 py-2 text-sm text-white hover:bg-[#6B4CDC]"
+                  >
+                    Continue to Create
+                  </button>
+                </>
+              )}
+              {gateState === GATE_FAIL && (
+                <DrawerClose asChild>
+                  <button
+                    type="button"
+                    className="rounded-lg bg-[#1e1e24] px-4 py-2 text-sm text-[#A1A1B0] hover:text-white"
+                  >
+                    Close
+                  </button>
+                </DrawerClose>
+              )}
+              {gateState === GATE_CHECKING && (
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-lg bg-[#1e1e24] px-4 py-2 text-sm text-[#A1A1B0] opacity-50"
+                >
+                  Please wait…
+                </button>
+              )}
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+
+        {/* Create button - only visible after validation passes */}
+        {gateState === GATE_OK && (
+          <button
+            type="button"
+            onClick={create}
+            disabled={busy}
+            className="mt-2 rounded-xl bg-[#7C5CFC] px-4 py-2 text-sm text-white disabled:opacity-50 hover:bg-[#6B4CDC]"
+          >
+            {busy
+              ? "Submitting..."
+              : initiaAddress
+                ? `Create Market (${formatInit(creationFee)} INIT fee)`
+                : "Connect Wallet to Create"}
+          </button>
+        )}
       </div>
     </section>
   );

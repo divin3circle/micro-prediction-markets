@@ -9,6 +9,16 @@ function formatInit(micro) {
   });
 }
 
+function formatDateTime(sec) {
+  return new Date(sec * 1000).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function useCountdown(closeTime) {
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
   useEffect(() => {
@@ -68,6 +78,21 @@ export function MarketCard({ market, onBet }) {
       <div className="mb-4 flex items-center justify-between text-xs">
         <span style={{ color: YES_COLOR }}>{yesPct.toFixed(0)}% YES</span>
         <span style={{ color: NO_COLOR }}>{noPct.toFixed(0)}% NO</span>
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="rounded-xl border border-[#2A2A35] bg-[#0D0D0F] px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-[#6B7280]">Close</p>
+          <p className="mt-1 text-xs font-medium text-[#D1D5DB]">
+            {formatDateTime(market.closeTime)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-[#2A2A35] bg-[#0D0D0F] px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-[#6B7280]">Resolve</p>
+          <p className="mt-1 text-xs font-medium text-[#D1D5DB]">
+            {formatDateTime(market.resolveTime)}
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center justify-between">

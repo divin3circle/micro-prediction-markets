@@ -5,7 +5,9 @@ import {
   MODULE_NAME,
   FEE_DENOM,
   CHAIN_ID,
+  MsgExecute,
 } from "./chain.js";
+import { Fee } from "@initia/initia.js";
 import { logError } from "./errorLogging.js";
 
 /**
@@ -24,6 +26,28 @@ function bcsBool(b) {
   return Buffer.from([b ? 1 : 0]).toString("base64");
 }
 
+function resolveSenderAddress(key) {
+  if (!key) throw new Error("Missing wallet key");
+
+  if (typeof key.accAddress === "function") {
+    return key.accAddress("init");
+  }
+
+  if (typeof key.accAddress === "string" && key.accAddress.length > 0) {
+    return key.accAddress;
+  }
+
+  if (typeof key.address === "function") {
+    return key.address();
+  }
+
+  if (typeof key.address === "string" && key.address.length > 0) {
+    return key.address;
+  }
+
+  throw new Error("Unable to resolve sender address from wallet key");
+}
+
 /**
  * Build and broadcast a MsgExecute transaction.
  * Returns the tx hash on success, throws on failure.
@@ -34,24 +58,20 @@ async function executeTx(functionName, args) {
 
     await wallet.accountNumberAndSequence();
     const key = wallet.key;
-    const address = key.accAddress("init");
+    const address = resolveSenderAddress(key);
 
-    const msg = {
-      "@type": "/initia.move.v1.MsgExecute",
-      sender: address,
-      module_address: MODULE_ADDRESS,
-      module_name: MODULE_NAME,
-      function_name: functionName,
-      type_args: [],
+    const msg = new MsgExecute(
+      address,
+      MODULE_ADDRESS,
+      MODULE_NAME,
+      functionName,
+      [],
       args,
-    };
+    );
 
     const tx = await wallet.createAndSignTx({
       msgs: [msg],
-      fee: {
-        amount: [{ denom: FEE_DENOM, amount: "0" }],
-        gas: "400000",
-      },
+      fee: new Fee(400000, `0${FEE_DENOM}`),
       memo: `pulsemarket-agent: ${functionName}`,
     });
 

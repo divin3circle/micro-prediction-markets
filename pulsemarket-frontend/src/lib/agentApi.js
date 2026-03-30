@@ -40,11 +40,11 @@ export const agentApi = {
       body: JSON.stringify({ yesWon }),
     }),
 
-  /** Validate a market question with AI */
-  validateQuestion: (question) =>
+  /** Validate a market question + timing window with AI */
+  validateQuestion: (question, closeTime, resolveTime) =>
     apiFetch("/api/validate-question", {
       method: "POST",
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, closeTime, resolveTime }),
     }),
 
   /** Health check */

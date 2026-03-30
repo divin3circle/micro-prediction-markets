@@ -23,6 +23,7 @@
     "react-router-dom": "^7.13.2",
     "tailwind-merge": "^3.5.0",
     "util": "*",
+    "vaul": "^1.1.2",
     "viem": "*",
     "wagmi": "*"
   },

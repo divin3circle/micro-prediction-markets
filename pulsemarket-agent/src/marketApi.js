@@ -116,10 +116,11 @@ export async function getMarketsToClose() {
   return all.filter((m) => m.status === 0 && m.closeTime <= nowSec);
 }
 
-/** Returns markets ready for AI research + resolution (CLOSED) */
+/** Returns markets ready for AI research + resolution (CLOSED + resolveTime passed) */
 export async function getClosedMarkets() {
+  const nowSec = Math.floor(Date.now() / 1000);
   const all = await getAllMarkets();
-  return all.filter((m) => m.status === 1);
+  return all.filter((m) => m.status === 1 && m.resolveTime <= nowSec);
 }
 
 export async function getStats() {
