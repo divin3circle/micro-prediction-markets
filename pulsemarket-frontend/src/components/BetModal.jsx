@@ -28,18 +28,14 @@ export function BetModal({
   const { username, loading: usernameLoading } =
     useInitiaUsername(connectedAddress);
 
-  if (!open || !market) return null;
-
   const betMicro = toMicro(amount);
-  const totalPool = market.totalYesAmount + market.totalNoAmount;
+  const totalPool = (market?.totalYesAmount ?? 0) + (market?.totalNoAmount ?? 0);
   const feeBps = 200;
 
   const preview = useMemo(() => {
+    if (!market || !betMicro) return { payout: 0, share: 0 };
     const sideTotal =
       side === "YES" ? market.totalYesAmount : market.totalNoAmount;
-    if (!betMicro) {
-      return { payout: 0, share: 0 };
-    }
     const fee = Math.floor(((totalPool + betMicro) * feeBps) / 10000);
     const net = totalPool + betMicro - fee;
     const payout = Math.floor((net * betMicro) / (sideTotal + betMicro));
@@ -48,11 +44,12 @@ export function BetModal({
   }, [
     betMicro,
     feeBps,
-    market.totalNoAmount,
-    market.totalYesAmount,
+    market,
     side,
     totalPool,
   ]);
+
+  if (!open || !market) return null;
 
   const place = async () => {
     if (!betMicro || busy) return;

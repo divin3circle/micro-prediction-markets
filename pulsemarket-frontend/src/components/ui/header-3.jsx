@@ -194,9 +194,9 @@ function useScroll(threshold) {
 
 function Wordmark() {
   return (
-    <span className="text-xl lowercase font-mono font-semibold tracking-tight">
+    <span className="text-xl lowercase font-semibold tracking-tight">
       <span className="text-white">im</span>
-      <span className="text-[#7C5CFC]">pulsive</span>
+      <span className="text-[#7C5CFC]">pulsive.</span>
     </span>
   );
 }

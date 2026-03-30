@@ -103,7 +103,7 @@ function App() {
 
 function AppShell() {
   const navigate = useNavigate();
-  const { initiaAddress, openConnect, openDeposit } = useInterwovenKit();
+  const { initiaAddress, openConnect, openBridge } = useInterwovenKit();
   const {
     sessionActive,
     initializeSession,
@@ -253,21 +253,15 @@ function AppShell() {
     setBridgeStartBalance(typeof baseline === "number" ? baseline : 0);
     setDepositPending(true);
     try {
-      openDeposit?.({
-        chainId: CHAIN_ID,
-        denoms: [FEE_DENOM],
-        srcOptions: [
-          {
-            chainId: L1_CHAIN_ID,
-            denom: L1_DENOM,
-          },
-        ],
+      openBridge?.({
+        srcChainId: L1_CHAIN_ID,
+        srcDenom: L1_DENOM,
       });
     } catch (e) {
       setDepositPending(false);
       setFlash(e?.message || "Failed to open deposit flow");
     }
-  }, [initiaAddress, openConnect, refreshBalance, openDeposit, setFlash]);
+  }, [initiaAddress, openConnect, refreshBalance, openBridge, setFlash]);
 
   const refreshL1Balance = useCallback(
     async (showSkeleton = false) => {

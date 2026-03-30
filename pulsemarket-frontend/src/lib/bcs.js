@@ -1,6 +1,6 @@
 import { AccAddress } from "@initia/initia.js";
 
-function toBase64(bytes) {
+export function toBase64(bytes) {
   let binary = "";
   bytes.forEach((b) => {
     binary += String.fromCharCode(b);
@@ -24,11 +24,11 @@ export function bcsU64(value) {
   const view = new DataView(buf);
   const n = BigInt(value);
   view.setBigUint64(0, n, true);
-  return toBase64(new Uint8Array(buf));
+  return new Uint8Array(buf);
 }
 
 export function bcsBool(value) {
-  return toBase64(Uint8Array.from([value ? 1 : 0]));
+  return Uint8Array.from([value ? 1 : 0]);
 }
 
 export function bcsString(value) {
@@ -37,7 +37,7 @@ export function bcsString(value) {
   const out = new Uint8Array(len.length + utf8.length);
   out.set(len, 0);
   out.set(utf8, len.length);
-  return toBase64(out);
+  return out;
 }
 
 export function bcsAddress(address) {
@@ -46,5 +46,5 @@ export function bcsAddress(address) {
   for (let i = 0; i < out.length; i += 1) {
     out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
-  return toBase64(out);
+  return out;
 }

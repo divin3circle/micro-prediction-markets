@@ -1,5 +1,5 @@
-export const CHAIN_ID = import.meta.env.VITE_CHAIN_ID;
-export const LCD_URL = import.meta.env.VITE_RPC_URL;
+export const CHAIN_ID = import.meta.env.VITE_CHAIN_ID || "micro-markets";
+export const LCD_URL = import.meta.env.VITE_RPC_URL || "http://localhost:1317";
 export const TENDERMINT_RPC_URL =
   import.meta.env.VITE_TENDERMINT_RPC_URL || "http://localhost:26657";
 export const MODULE_ADDRESS = import.meta.env.VITE_MODULE_ADDRESS;
@@ -14,6 +14,9 @@ export const L1_LCD_URL =
 export const L1_DENOM = import.meta.env.VITE_L1_DENOM || "uinit";
 export const EXECUTOR_URL =
   import.meta.env.VITE_EXECUTOR_URL || "http://localhost:3000";
+export const INDEXER_URL =
+  import.meta.env.VITE_INDEXER_URL || "http://localhost:6767";
+export const OP_BRIDGE_ID = import.meta.env.VITE_OP_BRIDGE_ID || "1725";
 
 export const customChain = {
   chain_id: CHAIN_ID,
@@ -22,13 +25,13 @@ export const customChain = {
   network_type: "testnet",
   bech32_prefix: "init",
   logo_URIs: {
-    png: "https://raw.githubusercontent.com/initia-labs/initia-registry/main/testnets/initia/images/initia.png",
-    svg: "https://raw.githubusercontent.com/initia-labs/initia-registry/main/testnets/initia/images/initia.svg",
+    png: "https://raw.githubusercontent.com/divin3circle/micro-prediction-markets/refs/heads/main/pulsemarket-frontend/assets/pulse-logo.png?token=GHSAT0AAAAAADV5Y62HVG5B3T4HEXFAEWAQ2OJ7CVQ",
+    svg: "https://raw.githubusercontent.com/divin3circle/micro-prediction-markets/refs/heads/main/pulsemarket-frontend/assets/pulse-logo.png?token=GHSAT0AAAAAADV5Y62HD2LVXDQY24WGRUXA2OJWAXQ",
   },
   apis: {
     rpc: [{ address: TENDERMINT_RPC_URL }],
     rest: [{ address: LCD_URL }],
-    indexer: [{ address: "http://localhost:8080" }],
+    indexer: [{ address: INDEXER_URL }],
   },
   fees: {
     fee_tokens: [
@@ -47,13 +50,14 @@ export const customChain = {
   native_assets: [
     {
       denom: FEE_DENOM,
-      name: "INIT",
+      name: "Initia Native Token",
       symbol: "INIT",
       decimals: 6,
     },
   ],
   metadata: {
     is_l1: false,
+    op_bridge_id: OP_BRIDGE_ID,
     executor_uri: EXECUTOR_URL,
     minitia: { type: "minimove" },
   },

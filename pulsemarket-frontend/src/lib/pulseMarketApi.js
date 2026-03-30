@@ -10,7 +10,7 @@ import {
   MODULE_ADDRESS,
   MODULE_NAME,
 } from "../config/chain";
-import { bcsAddress, bcsBool, bcsString, bcsU64 } from "./bcs";
+import { bcsAddress, bcsBool, bcsString, bcsU64, toBase64 } from "./bcs";
 
 const rest = new RESTClient(LCD_URL);
 
@@ -84,7 +84,7 @@ export async function getMarket(marketId) {
     MODULE_NAME,
     "get_market",
     [],
-    [bcsU64(marketId)],
+    [toBase64(bcsU64(marketId))],
   );
   return normalizeMarket(parseViewData(res));
 }
@@ -95,7 +95,7 @@ export async function getUserPosition(marketId, userAddress) {
     MODULE_NAME,
     "get_user_position",
     [],
-    [bcsU64(marketId), bcsAddress(userAddress)],
+    [toBase64(bcsU64(marketId)), toBase64(bcsAddress(userAddress))],
   );
   const tuple = parseViewData(res);
   return {
@@ -150,7 +150,7 @@ export function usePulseMarketTx() {
 
         const { useAutoSign = false } = options;
 
-        return requestTxSync({
+        const payload = {
           chainId: CHAIN_ID,
           ...(useAutoSign ? { autoSign: true, feeDenom: FEE_DENOM } : {}),
           messages: [
@@ -160,13 +160,30 @@ export function usePulseMarketTx() {
                 sender: initiaAddress,
                 moduleAddress: MODULE_ADDRESS,
                 moduleName: MODULE_NAME,
-                functionName,
+                functionName: functionName,
                 typeArgs: [],
                 args,
               },
             },
           ],
-        });
+        };
+
+        console.log(
+          "[PulseMarket] requestTxSync payload:",
+          JSON.stringify(payload, (_, v) =>
+            v instanceof Uint8Array ? toBase64(v) : v
+          , 2)
+        );
+
+        try {
+          const result = await requestTxSync(payload);
+          console.log("[PulseMarket] requestTxSync result:", result);
+          return result;
+        } catch (err) {
+          console.error("[PulseMarket] requestTxSync error:", err);
+          console.error("[PulseMarket] error stack:", err?.stack);
+          throw err;
+        }
       },
     [initiaAddress, requestTxSync],
   );
