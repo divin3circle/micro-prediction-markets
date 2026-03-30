@@ -9,3 +9,5 @@ pulsemarket-frontend/node_modules/
 node_modules
 pulsemarket-agent/.env
 pulsemarket-frontend/.env
+implementation_plan.md.resolved
+walkthrough.md.resolved

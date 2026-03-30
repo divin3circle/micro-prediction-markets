@@ -7,7 +7,7 @@ import { TopNav } from "./components/TopNav";
 import { BetModal } from "./components/BetModal";
 import { Toast } from "./components/Toast";
 import { PositionsView } from "./components/PositionsView";
-import { AdminView } from "./components/AdminView";
+import { StatsView } from "./components/StatsView";
 import { CreateMarketView } from "./components/CreateMarketView";
 import {
   CHAIN_ID,
@@ -407,23 +407,7 @@ function AppShell() {
               />
             }
           />
-          <Route
-            path="/admin"
-            element={
-              <AdminView
-                isAdmin={isAdmin}
-                oracleAddress={oracleAddress}
-                onCreateMarket={async (payload) => {
-                  const ok = await runAndSync(
-                    () => tx.createMarket(payload),
-                    "Market created",
-                    { requiresAutoSign: false },
-                  );
-                  if (ok) await refreshAdmin();
-                }}
-              />
-            }
-          />
+          <Route path="/stats" element={<StatsView />} />
           <Route
             path="/create"
             element={
@@ -448,15 +432,13 @@ function AppShell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => navigate("/admin")}
-            className="fixed bottom-6 right-4 rounded-full bg-[#7C5CFC] px-5 py-3 text-sm font-medium text-white shadow-[0_14px_30px_rgba(124,92,252,0.35)]"
-          >
-            Admin Panel
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => navigate("/stats")}
+          className="fixed bottom-6 right-4 rounded-full bg-[#7C5CFC] px-5 py-3 text-sm font-medium text-white shadow-[0_14px_30px_rgba(124,92,252,0.35)]"
+        >
+          📊 Stats
+        </button>
       </main>
 
       <BetModal
