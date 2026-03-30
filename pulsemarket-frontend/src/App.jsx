@@ -24,8 +24,6 @@ import {
 import {
   getCreationFee,
   getL1InitBalance,
-  getMarket,
-  getMarketCount,
   getNativeBalance,
   getOracleAddress,
   usePulseMarketTx,
@@ -201,24 +199,9 @@ function AppShell() {
     ],
   );
 
-  const fetchAllMarkets = useCallback(async () => {
-    const count = await getMarketCount();
-    const ids = Array.from({ length: count }, (_, i) => i);
-    const all = await Promise.all(ids.map((id) => getMarket(id)));
-    return all.sort((a, b) => b.id - a.id);
-  }, []);
 
-  const [adminMarkets, setAdminMarkets] = useState([]);
-  const refreshAdmin = useCallback(async () => {
-    const all = await fetchAllMarkets();
-    setAdminMarkets(all);
-  }, [fetchAllMarkets]);
+  const refreshAdmin = useCallback(() => refresh(), [refresh]);
 
-  const ensureAdminMarkets = useCallback(async () => {
-    if (!adminMarkets.length) {
-      await refreshAdmin();
-    }
-  }, [adminMarkets.length, refreshAdmin]);
 
   const refreshBalance = useCallback(
     async (showSkeleton = false) => {
@@ -287,11 +270,7 @@ function AppShell() {
     [hasLoadedL1Balance, initiaAddress],
   );
 
-  useEffect(() => {
-    if (isAdmin) {
-      refreshAdmin().catch(() => {});
-    }
-  }, [isAdmin, refreshAdmin]);
+
 
   useEffect(() => {
     let mounted = true;
@@ -433,7 +412,6 @@ function AppShell() {
             element={
               <AdminView
                 isAdmin={isAdmin}
-                allMarkets={adminMarkets}
                 oracleAddress={oracleAddress}
                 onCreateMarket={async (payload) => {
                   const ok = await runAndSync(
@@ -441,29 +419,7 @@ function AppShell() {
                     "Market created",
                     { requiresAutoSign: false },
                   );
-                  if (ok) {
-                    await refreshAdmin();
-                  }
-                }}
-                onCloseMarket={async (marketId) => {
-                  const ok = await runAndSync(
-                    () => tx.closeMarket(marketId),
-                    `Market #${marketId} closed`,
-                    { requiresAutoSign: false },
-                  );
-                  if (ok) {
-                    await refreshAdmin();
-                  }
-                }}
-                onResolve={async ({ marketId, yesWon }) => {
-                  const ok = await runAndSync(
-                    () => tx.resolveMarket({ marketId, yesWon }),
-                    `Market #${marketId} resolved`,
-                    { requiresAutoSign: false },
-                  );
-                  if (ok) {
-                    await refreshAdmin();
-                  }
+                  if (ok) await refreshAdmin();
                 }}
               />
             }
@@ -495,10 +451,7 @@ function AppShell() {
         {isAdmin && (
           <button
             type="button"
-            onClick={async () => {
-              await ensureAdminMarkets();
-              navigate("/admin");
-            }}
+            onClick={() => navigate("/admin")}
             className="fixed bottom-6 right-4 rounded-full bg-[#7C5CFC] px-5 py-3 text-sm font-medium text-white shadow-[0_14px_30px_rgba(124,92,252,0.35)]"
           >
             Admin Panel

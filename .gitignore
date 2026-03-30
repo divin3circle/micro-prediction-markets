@@ -6,3 +6,6 @@ prediction-market-spec.md
 
 contracts/build/
 pulsemarket-frontend/node_modules/
+node_modules
+pulsemarket-agent/.env
+pulsemarket-frontend/.env
