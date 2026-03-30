@@ -1,4 +1,12 @@
-import { getOracleWallet, lcd, MODULE_ADDRESS, MODULE_NAME, FEE_DENOM, CHAIN_ID } from "./chain.js";
+import {
+  getOracleWallet,
+  lcd,
+  MODULE_ADDRESS,
+  MODULE_NAME,
+  FEE_DENOM,
+  CHAIN_ID,
+} from "./chain.js";
+import { logError } from "./errorLogging.js";
 
 /**
  * BCS encode a u64 number to little-endian 8 bytes, base64 encoded.
@@ -21,39 +29,56 @@ function bcsBool(b) {
  * Returns the tx hash on success, throws on failure.
  */
 async function executeTx(functionName, args) {
-  const wallet = getOracleWallet();
+  try {
+    const wallet = getOracleWallet();
 
-  const [account] = await wallet.accountNumberAndSequence();
-  const key = wallet.key;
-  const address = key.accAddress("init");
+    await wallet.accountNumberAndSequence();
+    const key = wallet.key;
+    const address = key.accAddress("init");
 
-  const msg = {
-    "@type": "/initia.move.v1.MsgExecute",
-    sender: address,
-    module_address: MODULE_ADDRESS,
-    module_name: MODULE_NAME,
-    function_name: functionName,
-    type_args: [],
-    args,
-  };
+    const msg = {
+      "@type": "/initia.move.v1.MsgExecute",
+      sender: address,
+      module_address: MODULE_ADDRESS,
+      module_name: MODULE_NAME,
+      function_name: functionName,
+      type_args: [],
+      args,
+    };
 
-  const tx = await wallet.createAndSignTx({
-    msgs: [msg],
-    fee: {
-      amount: [{ denom: FEE_DENOM, amount: "0" }],
-      gas: "400000",
-    },
-    memo: `pulsemarket-agent: ${functionName}`,
-  });
+    const tx = await wallet.createAndSignTx({
+      msgs: [msg],
+      fee: {
+        amount: [{ denom: FEE_DENOM, amount: "0" }],
+        gas: "400000",
+      },
+      memo: `pulsemarket-agent: ${functionName}`,
+    });
 
-  const result = await lcd.tx.broadcast(tx);
+    const result = await lcd.tx.broadcast(tx);
 
-  if (result.code !== 0) {
-    throw new Error(`Tx failed (code ${result.code}): ${result.raw_log}`);
+    if (result.code !== 0) {
+      const error = new Error(
+        `Tx failed (code ${result.code}): ${result.raw_log}`,
+      );
+      error.txResult = result;
+      throw error;
+    }
+
+    console.log(`[txHelper] ${functionName} → txhash: ${result.txhash}`);
+    return result.txhash;
+  } catch (err) {
+    logError("[txHelper] executeTx failed", err, {
+      functionName,
+      chainId: CHAIN_ID,
+      moduleAddress: MODULE_ADDRESS,
+      moduleName: MODULE_NAME,
+      feeDenom: FEE_DENOM,
+      argsCount: args.length,
+      txResult: err?.txResult,
+    });
+    throw err;
   }
-
-  console.log(`[txHelper] ${functionName} → txhash: ${result.txhash}`);
-  return result.txhash;
 }
 
 /**

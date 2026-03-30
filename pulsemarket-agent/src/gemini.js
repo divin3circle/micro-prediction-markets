@@ -1,7 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import "dotenv/config";
+import { logError } from "./errorLogging.js";
 
 let genAI;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
 
 function getClient() {
   if (!genAI) {
@@ -17,7 +19,7 @@ function getClient() {
  * Returns { ok, verdict, reason }
  */
 export async function validateMarketQuestion(question) {
-  const model = getClient().getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = getClient().getGenerativeModel({ model: GEMINI_MODEL });
 
   const prompt = `You are a prediction market quality evaluator. Evaluate the following market question and respond with ONLY valid JSON.
 
@@ -40,10 +42,16 @@ Respond with this exact JSON format:
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
     // Strip markdown code fences if present
-    const json = text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+    const json = text
+      .replace(/^```json\s*/i, "")
+      .replace(/```\s*$/, "")
+      .trim();
     return JSON.parse(json);
   } catch (err) {
-    console.error("[gemini] validateMarketQuestion error:", err.message);
+    logError("[gemini] validateMarketQuestion error", err, {
+      model: GEMINI_MODEL,
+      question,
+    });
     return {
       verdict: "UNKNOWN",
       ok: true, // default to allow if AI fails
@@ -59,7 +67,7 @@ Respond with this exact JSON format:
  * Returns { verdict: "YES"|"NO"|"UNCERTAIN", confidence: "HIGH"|"MEDIUM"|"LOW", reasoning, verificationSource }
  */
 export async function researchMarketOutcome(market) {
-  const model = getClient().getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = getClient().getGenerativeModel({ model: GEMINI_MODEL });
 
   const closeDate = new Date(market.closeTime * 1000).toUTCString();
   const resolveDate = new Date(market.resolveTime * 1000).toUTCString();
@@ -85,7 +93,10 @@ Respond with ONLY valid JSON in this exact format:
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
-    const json = text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+    const json = text
+      .replace(/^```json\s*/i, "")
+      .replace(/```\s*$/, "")
+      .trim();
     const parsed = JSON.parse(json);
     return {
       marketId: market.id,
@@ -95,7 +106,17 @@ Respond with ONLY valid JSON in this exact format:
       researchedAt: Date.now(),
     };
   } catch (err) {
-    console.error(`[gemini] researchMarketOutcome error for market ${market.id}:`, err.message);
+    logError(
+      `[gemini] researchMarketOutcome error for market ${market.id}`,
+      err,
+      {
+        model: GEMINI_MODEL,
+        marketId: market.id,
+        question: market.question,
+        closeTime: market.closeTime,
+        resolveTime: market.resolveTime,
+      },
+    );
     return {
       marketId: market.id,
       question: market.question,

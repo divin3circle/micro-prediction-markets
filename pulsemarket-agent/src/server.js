@@ -5,6 +5,8 @@ import { startAgent, verdictStore, researchMarket } from "./agent.js";
 import { getStats, getAllMarkets, getMarket } from "./marketApi.js";
 import { resolveMarket } from "./txHelper.js";
 import { validateMarketQuestion } from "./gemini.js";
+import { CHAIN_ID, LCD_URL, MODULE_ADDRESS, MODULE_NAME } from "./chain.js";
+import { logError } from "./errorLogging.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -39,6 +41,7 @@ app.get("/api/stats", async (_req, res) => {
     const stats = await getStats();
     res.json(stats);
   } catch (err) {
+    logError("[server] /api/stats failed", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -49,6 +52,7 @@ app.get("/api/markets", async (_req, res) => {
     const markets = await getAllMarkets();
     res.json(markets);
   } catch (err) {
+    logError("[server] /api/markets failed", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -66,7 +70,8 @@ app.get("/api/verdicts", (_req, res) => {
 app.get("/api/verdicts/:id", (req, res) => {
   const id = Number(req.params.id);
   const verdict = verdictStore.get(id);
-  if (!verdict) return res.status(404).json({ error: "No verdict yet for this market" });
+  if (!verdict)
+    return res.status(404).json({ error: "No verdict yet for this market" });
   res.json(verdict);
 });
 
@@ -80,6 +85,7 @@ app.post("/api/research/:id", requireAdmin, async (req, res) => {
     const verdict = await researchMarket(market);
     res.json(verdict);
   } catch (err) {
+    logError(`[server] /api/research/${id} failed`, err, { marketId: id });
     res.status(500).json({ error: err.message });
   }
 });
@@ -89,12 +95,18 @@ app.post("/api/resolve/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { yesWon } = req.body;
   if (typeof yesWon !== "boolean") {
-    return res.status(400).json({ error: "yesWon (boolean) is required in request body" });
+    return res
+      .status(400)
+      .json({ error: "yesWon (boolean) is required in request body" });
   }
   try {
     const txHash = await resolveMarket(id, yesWon);
     res.json({ success: true, txHash, marketId: id, yesWon });
   } catch (err) {
+    logError(`[server] /api/resolve/${id} failed`, err, {
+      marketId: id,
+      yesWon,
+    });
     res.status(500).json({ error: err.message });
   }
 });
@@ -109,6 +121,7 @@ app.post("/api/validate-question", async (req, res) => {
     const result = await validateMarketQuestion(question);
     res.json(result);
   } catch (err) {
+    logError("[server] /api/validate-question failed", err, { question });
     res.status(500).json({ error: err.message });
   }
 });
@@ -116,6 +129,11 @@ app.post("/api/validate-question", async (req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, "127.0.0.1", () => {
-  console.log(`[server] PulseMarket agent API listening on http://127.0.0.1:${PORT}`);
+  console.log(
+    `[server] PulseMarket agent API listening on http://127.0.0.1:${PORT}`,
+  );
+  console.log(
+    `[server] config: chainId=${CHAIN_ID}, lcdUrl=${LCD_URL}, module=${MODULE_ADDRESS}::${MODULE_NAME}, geminiModel=${process.env.GEMINI_MODEL || "gemini-2.5-flash-lite"}`,
+  );
   startAgent();
 });

@@ -1,4 +1,5 @@
 import { rest, MODULE_ADDRESS, MODULE_NAME } from "./chain.js";
+import { logError } from "./errorLogging.js";
 
 function parseViewData(res) {
   return JSON.parse(res.data);
@@ -11,7 +12,7 @@ function normalizeMarket(tuple) {
     category: tuple[2],
     closeTime: Number(tuple[3]),
     resolveTime: Number(tuple[4]),
-    status: Number(tuple[5]),  // 0=OPEN, 1=CLOSED, 2=RESOLVED, 3=CANCELLED
+    status: Number(tuple[5]), // 0=OPEN, 1=CLOSED, 2=RESOLVED, 3=CANCELLED
     outcome: Number(tuple[6]),
     totalYesAmount: Number(tuple[7]),
     totalNoAmount: Number(tuple[8]),
@@ -24,14 +25,44 @@ export function statusLabel(status) {
 }
 
 export async function getMarketCount() {
-  const res = await rest.move.view(MODULE_ADDRESS, MODULE_NAME, "get_market_count", [], []);
-  return Number(parseViewData(res));
+  try {
+    const res = await rest.move.view(
+      MODULE_ADDRESS,
+      MODULE_NAME,
+      "get_market_count",
+      [],
+      [],
+    );
+    return Number(parseViewData(res));
+  } catch (err) {
+    logError("[marketApi] getMarketCount failed", err, {
+      moduleAddress: MODULE_ADDRESS,
+      moduleName: MODULE_NAME,
+      viewFn: "get_market_count",
+    });
+    throw err;
+  }
 }
 
 export async function getActiveMarketIds() {
-  const res = await rest.move.view(MODULE_ADDRESS, MODULE_NAME, "get_active_market_ids", [], []);
-  const ids = parseViewData(res);
-  return ids.map((id) => Number(id));
+  try {
+    const res = await rest.move.view(
+      MODULE_ADDRESS,
+      MODULE_NAME,
+      "get_active_market_ids",
+      [],
+      [],
+    );
+    const ids = parseViewData(res);
+    return ids.map((id) => Number(id));
+  } catch (err) {
+    logError("[marketApi] getActiveMarketIds failed", err, {
+      moduleAddress: MODULE_ADDRESS,
+      moduleName: MODULE_NAME,
+      viewFn: "get_active_market_ids",
+    });
+    throw err;
+  }
 }
 
 /** Fetch a single market by id using BCS-encoded u64 arg */
@@ -41,8 +72,24 @@ export async function getMarket(marketId) {
   buf.writeBigUInt64LE(BigInt(marketId));
   const b64 = buf.toString("base64");
 
-  const res = await rest.move.view(MODULE_ADDRESS, MODULE_NAME, "get_market", [], [b64]);
-  return normalizeMarket(parseViewData(res));
+  try {
+    const res = await rest.move.view(
+      MODULE_ADDRESS,
+      MODULE_NAME,
+      "get_market",
+      [],
+      [b64],
+    );
+    return normalizeMarket(parseViewData(res));
+  } catch (err) {
+    logError("[marketApi] getMarket failed", err, {
+      marketId,
+      moduleAddress: MODULE_ADDRESS,
+      moduleName: MODULE_NAME,
+      viewFn: "get_market",
+    });
+    throw err;
+  }
 }
 
 /** Fetch all markets (by iterating count) */
@@ -54,7 +101,9 @@ export async function getAllMarkets() {
       const m = await getMarket(i);
       markets.push(m);
     } catch (err) {
-      console.warn(`[marketApi] failed to fetch market ${i}:`, err.message);
+      logError(`[marketApi] failed to fetch market ${i}`, err, {
+        marketId: i,
+      });
     }
   }
   return markets;

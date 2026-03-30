@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { getMarketsToClose, getClosedMarkets } from "./marketApi.js";
 import { closeMarket } from "./txHelper.js";
 import { researchMarketOutcome } from "./gemini.js";
+import { logError } from "./errorLogging.js";
 
 /**
  * In-memory verdict store.
@@ -19,7 +20,9 @@ async function runAutoClose() {
   try {
     markets = await getMarketsToClose();
   } catch (err) {
-    console.error("[agent/auto-close] Failed to fetch markets:", err.message);
+    logError("[agent/auto-close] Failed to fetch markets", err, {
+      phase: "getMarketsToClose",
+    });
     return;
   }
 
@@ -33,9 +36,15 @@ async function runAutoClose() {
 
     try {
       const txHash = await closeMarket(market.id);
-      console.log(`[agent/auto-close] Market ${market.id} closed. tx: ${txHash}`);
+      console.log(
+        `[agent/auto-close] Market ${market.id} closed. tx: ${txHash}`,
+      );
     } catch (err) {
-      console.error(`[agent/auto-close] Failed to close market ${market.id}:`, err.message);
+      logError(`[agent/auto-close] Failed to close market ${market.id}`, err, {
+        marketId: market.id,
+        question: market.question,
+        closeTime: market.closeTime,
+      });
     } finally {
       inProgress.delete(`close-${market.id}`);
     }
@@ -49,7 +58,9 @@ async function runAiResearch() {
   try {
     markets = await getClosedMarkets();
   } catch (err) {
-    console.error("[agent/ai-research] Failed to fetch closed markets:", err.message);
+    logError("[agent/ai-research] Failed to fetch closed markets", err, {
+      phase: "getClosedMarkets",
+    });
     return;
   }
 
@@ -58,21 +69,33 @@ async function runAiResearch() {
 
   if (unresearched.length === 0) return;
 
-  console.log(`[agent/ai-research] Researching ${unresearched.length} market(s)…`);
+  console.log(
+    `[agent/ai-research] Researching ${unresearched.length} market(s)…`,
+  );
 
   for (const market of unresearched) {
     if (inProgress.has(`research-${market.id}`)) continue;
     inProgress.add(`research-${market.id}`);
 
     try {
-      console.log(`[agent/ai-research] Researching market ${market.id}: "${market.question}"`);
+      console.log(
+        `[agent/ai-research] Researching market ${market.id}: "${market.question}"`,
+      );
       const verdict = await researchMarketOutcome(market);
       verdictStore.set(market.id, verdict);
       console.log(
-        `[agent/ai-research] Market ${market.id} verdict: ${verdict.verdict} (${verdict.confidence} confidence)`
+        `[agent/ai-research] Market ${market.id} verdict: ${verdict.verdict} (${verdict.confidence} confidence)`,
       );
     } catch (err) {
-      console.error(`[agent/ai-research] Failed to research market ${market.id}:`, err.message);
+      logError(
+        `[agent/ai-research] Failed to research market ${market.id}`,
+        err,
+        {
+          marketId: market.id,
+          question: market.question,
+          resolveTime: market.resolveTime,
+        },
+      );
     } finally {
       inProgress.delete(`research-${market.id}`);
     }
