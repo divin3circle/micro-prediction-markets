@@ -7,7 +7,7 @@ import {
   CHAIN_ID,
   MsgExecute,
 } from "./chain.js";
-import { Fee } from "@initia/initia.js";
+import { Fee } from "./initia-shim.js";
 import { logError } from "./errorLogging.js";
 
 /**

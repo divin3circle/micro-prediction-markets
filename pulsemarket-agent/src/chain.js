@@ -3,7 +3,7 @@ import {
   MnemonicKey,
   LCDClient,
   MsgExecute,
-} from "@initia/initia.js";
+} from "./initia-shim.js";
 import "dotenv/config";
 
 export const CHAIN_ID = process.env.CHAIN_ID || "micro-markets";

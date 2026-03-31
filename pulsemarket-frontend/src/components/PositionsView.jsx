@@ -59,12 +59,12 @@ export function PositionsView({
   return (
     <div className="space-y-3">
       {currentAddress && (
-        <div className="rounded-xl bg-[#101015] px-3 py-2 text-xs text-[#A1A1B0]">
-          Account:{" "}
-          <UserDisplay address={currentAddress} className="text-[#E5E7EB]" />
+        <div className="rounded-xl flex items-center gap-2 bg-[#101015] px-3 py-2 text-xs text-[#A1A1B0]">
+          Account: <UserDisplay address={currentAddress} className="text-[#E5E7EB]" />
         </div>
       )}
-      {positions.reverse().map(({ market, position }) => {
+    <div className="flex gap-2 flex-col-reverse">
+        {positions.map(({ market, position }) => {
         const status = statusLabel(market);
         const isWinner =
           (market.outcome === 1 && position.yesAmount > 0) ||
@@ -155,6 +155,7 @@ export function PositionsView({
           </div>
         );
       })}
+    </div>
     </div>
   );
 }

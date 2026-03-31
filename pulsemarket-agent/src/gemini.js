@@ -1,6 +1,12 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+// createRequire no longer needed — EventSource polyfill removed
 import "dotenv/config";
 import { logError } from "./errorLogging.js";
+
+// StreamableHTTPClientTransport uses fetch (not EventSource/SSE),
+// so no EventSource polyfill is needed.
 
 let genAI;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
@@ -128,57 +134,59 @@ Respond with this exact JSON format:
   }
 }
 
-/**
- * Performs an MCP tool call (web_search or get_crypto_price).
- */
-async function performMCPToolCall(toolName, args) {
+async function performMCPToolCall(toolName, args, timeoutMs = 15000) {
+  let transport;
   try {
     console.log(`[gemini/mcp] Executing tool: ${toolName} with args:`, args);
-    // Assuming you run the Cloudflare worker locally on port 8787.
-    // In production, update this to your deployed worker URL.
-    // Note: The HTTP bridging in a production MCP setup might strictly require SSE or standard JSON-RPC over HTTP.
-    // Since we modeled the Worker to currently handle root `/search` dynamically, we'd need to adapt our worker for native MCP bridging.
-    // *Important:* Since the worker is a standard Cloudflare MCP template using `@modelcontextprotocol/sdk`, it expects either SSE or POST over `/mcp`.
-    // Instead of building a full JSON-RPC client from scratch here, let's just use simple fetch bridging for this hackathon context,
-    // assuming we adapt the worker to respond to simple POSTs if the full MCP client SDK is too heavy, OR we can use standard JSON-RPC.
+    let mcpUrl = process.env.MCP_SERVER_URL || "https://pulsemarket-mcp.sylus-abel.workers.dev/mcp";
+    // Sanitize: trim, remove trailing slashes except for /mcp
+    mcpUrl = mcpUrl.trim().replace(/\/$/, "");
+    if (!mcpUrl.endsWith("/mcp")) {
+      mcpUrl += "/mcp";
+    }
+    console.log(`[gemini/mcp] Using Streamable HTTP URL: ${mcpUrl}`);
+    // Use StreamableHTTPClientTransport — Cloudflare McpAgent uses the MCP
+    // Streamable HTTP protocol (POST /mcp), NOT the legacy SSE GET transport.
+    transport = new StreamableHTTPClientTransport(new URL(mcpUrl));
 
-    // For now, we will simulate the connection using the standard JSON RPC payload expected by the MCP server `fetch` handler.
-    const MCP_SERVER_URL =
-      process.env.MCP_SERVER_URL || "http://127.0.0.1:8787/mcp";
+    const client = new Client(
+      {
+        name: "PulseMarket Agent",
+        version: "1.0.0",
+      },
+      {
+        capabilities: {},
+      },
+    );
 
-    const jsonRpcPayload = {
-      jsonrpc: "2.0",
-      id: Date.now().toString(),
-      method: "tools/call",
-      params: {
+    await client.connect(transport);
+    console.log(`[gemini/mcp] Connected to MCP via Streamable HTTP.`);
+
+    const result = await client.callTool(
+      {
         name: toolName,
         arguments: args,
       },
-    };
+      undefined,
+      { timeout: timeoutMs },
+    );
 
-    const res = await fetch(MCP_SERVER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(jsonRpcPayload),
-    });
+    try {
+      await transport.close();
+    } catch (e) {}
 
-    if (!res.ok) {
-      console.error(
-        `[gemini/mcp] Tool ${toolName} failed with status ${res.status}`,
-      );
-      return `Error: Service unavailable (${res.status})`;
+    if (result && result.content && result.content.length > 0) {
+      return result.content[0].text;
     }
 
-    const data = await res.json();
-
-    // The MCP SDK usually returns { result: { content: [...] } }
-    if (data.result && data.result.content && data.result.content.length > 0) {
-      return data.result.content[0].text;
-    }
-
-    return JSON.stringify(data);
+    return JSON.stringify(result);
   } catch (err) {
-    console.error(`[gemini/mcp] Network error to MCP server`, err);
+    console.error(`[gemini/mcp] Server tool error`, err);
+    if (transport) {
+      try {
+        await transport.close();
+      } catch (e) {}
+    }
     return `Tool failed: ${err.message}`;
   }
 }
@@ -254,7 +262,7 @@ SEARCH STRATEGY BEST PRACTICES (CRITICAL FOR 100% ACCURACY):
 - If your first search query doesn't yield the exact answer, you are allowed up to 3 tool calls. For your next attempt, change the query strategy. Try targeting a specific authoritative source by appending words like "CoinGecko", "ESPN", "Reuters", or "Bloomberg" to your query.
 - Always compare the verified timestamp of the event against the market's Resolution time to ensure the event actually concluded.
 
-When you are ready to conclude, respond with ONLY valid JSON in this exact format:
+OUTPUT FORMAT — CRITICAL: Your final message MUST be ONLY a raw JSON object with no text before or after it. Do NOT write any sentences, summaries, or explanations outside the JSON block. Respond ONLY with this exact structure:
 {
   "verdict": "YES" | "NO" | "UNCERTAIN",
   "confidence": "HIGH" | "MEDIUM" | "LOW",
@@ -263,7 +271,9 @@ When you are ready to conclude, respond with ONLY valid JSON in this exact forma
 }`;
 
   try {
-    const chat = model.startChat();
+    const chat = model.startChat({
+      tools: [mcpTools],
+    });
     let result = await chat.sendMessage(prompt);
 
     // Check if the model decided to call the web_search tool
@@ -294,10 +304,31 @@ When you are ready to conclude, respond with ONLY valid JSON in this exact forma
     }
 
     const text = responseObj.text().trim();
-    const json = text
+    // Robust JSON extraction: strip markdown fences, then find the first { … } block
+    let json = text
       .replace(/^```json\s*/i, "")
       .replace(/```\s*$/, "")
       .trim();
+    // If text doesn't start with '{', try to extract the JSON object from within
+    if (!json.startsWith("{")) {
+      const match = json.match(/\{[\s\S]*\}/);
+      if (match) {
+        json = match[0];
+      } else {
+        // Gemini returned pure text with no JSON — treat as UNCERTAIN, don't crash
+        console.warn(`[gemini] No JSON found in response for market ${market.id}. Raw: ${text.slice(0, 200)}`);
+        return {
+          marketId: market.id,
+          question: market.question,
+          resolveTime: market.resolveTime,
+          verdict: "UNCERTAIN",
+          confidence: "LOW",
+          reasoning: "AI response was not in the expected JSON format.",
+          verificationSource: "N/A",
+          researchedAt: Date.now(),
+        };
+      }
+    }
     const parsed = JSON.parse(json);
     return {
       marketId: market.id,
