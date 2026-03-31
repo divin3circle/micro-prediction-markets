@@ -4,17 +4,17 @@ import { z } from "zod";
 
 export interface Env {
   SERPER_API_KEY: string;
+  COINGECKO_KEY?: string;
+  MCP_OBJECT: DurableObjectNamespace;
 }
 
-// Define our MCP agent with tools
 export class MyMCP extends McpAgent<Env> {
-  server = new McpServer({
+  server: any = new McpServer({
     name: "PulseMarket MCP Server",
     version: "1.0.0",
   });
 
   async init() {
-    // Web Search tool using Serper.dev
     this.server.tool(
       "web_search",
       "Search the web for real-time information, news, and facts to resolve prediction markets.",
@@ -81,6 +81,73 @@ export class MyMCP extends McpAgent<Env> {
               {
                 type: "text",
                 text: `Error performing search: ${error.message}`,
+              },
+            ],
+          };
+        }
+      },
+    );
+
+    this.server.tool(
+      "get_crypto_price",
+      "Fetch the exact, real-time price of a cryptocurrency in USD to resolve financial markets.",
+      {
+        coinId: z
+          .string()
+          .describe(
+            "The CoinGecko coin ID (e.g., 'bitcoin', 'ethereum', 'solana')",
+          ),
+      },
+      async ({ coinId }) => {
+        try {
+          const cgKey = this.env.COINGECKO_KEY;
+          const response = await fetch(
+            `https://api.coingecko.com/api/v3/simple/price?ids=${coinId.toLowerCase()}&vs_currencies=usd&include_last_updated_at=true&x_cg_demo_api_key=${cgKey}`,
+          );
+
+          if (!response.ok) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Error: CoinGecko API returned ${response.status}. Try using the 'web_search' tool instead if this fails repeatedly.`,
+                },
+              ],
+            };
+          }
+
+          const data = (await response.json()) as any;
+
+          if (!data || !data[coinId.toLowerCase()]) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Error: Could not find price data for coin ID '${coinId}'. Ensure it is a valid CoinGecko ID.`,
+                },
+              ],
+            };
+          }
+
+          const priceData = data[coinId.toLowerCase()];
+          const timestamp = new Date(
+            priceData.last_updated_at * 1000,
+          ).toISOString();
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Verified Crypto Price:\nCoin: ${coinId}\nPrice (USD): $${priceData.usd}\nLast Updated (UTC): ${timestamp}\nSource: CoinGecko API`,
+              },
+            ],
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error fetching crypto price: ${error.message}`,
               },
             ],
           };

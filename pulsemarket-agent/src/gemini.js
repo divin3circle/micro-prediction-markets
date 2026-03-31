@@ -129,34 +129,57 @@ Respond with this exact JSON format:
 }
 
 /**
- * Performs a web search using our Cloudflare MCP server (or external search wrapper).
- * @param {string} query
+ * Performs an MCP tool call (web_search or get_crypto_price).
  */
-async function performWebSearch(query) {
+async function performMCPToolCall(toolName, args) {
   try {
-    console.log(`[gemini/mcp] Performing web search: "${query}"`);
+    console.log(`[gemini/mcp] Executing tool: ${toolName} with args:`, args);
     // Assuming you run the Cloudflare worker locally on port 8787.
-    // You can also change this to the production URL later.
-    const MCP_SERVER_URL =
-      process.env.MCP_SERVER_URL || "http://127.0.0.1:8787/search";
+    // In production, update this to your deployed worker URL.
+    // Note: The HTTP bridging in a production MCP setup might strictly require SSE or standard JSON-RPC over HTTP.
+    // Since we modeled the Worker to currently handle root `/search` dynamically, we'd need to adapt our worker for native MCP bridging.
+    // *Important:* Since the worker is a standard Cloudflare MCP template using `@modelcontextprotocol/sdk`, it expects either SSE or POST over `/mcp`.
+    // Instead of building a full JSON-RPC client from scratch here, let's just use simple fetch bridging for this hackathon context,
+    // assuming we adapt the worker to respond to simple POSTs if the full MCP client SDK is too heavy, OR we can use standard JSON-RPC.
 
-    // We make a direct call to the worker endpoint we set up
+    // For now, we will simulate the connection using the standard JSON RPC payload expected by the MCP server `fetch` handler.
+    const MCP_SERVER_URL =
+      process.env.MCP_SERVER_URL || "http://127.0.0.1:8787/mcp";
+
+    const jsonRpcPayload = {
+      jsonrpc: "2.0",
+      id: Date.now().toString(),
+      method: "tools/call",
+      params: {
+        name: toolName,
+        arguments: args,
+      },
+    };
+
     const res = await fetch(MCP_SERVER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(jsonRpcPayload),
     });
 
     if (!res.ok) {
-      console.error(`[gemini/mcp] Search failed with status ${res.status}`);
-      return `Search error: ${res.statusText}`;
+      console.error(
+        `[gemini/mcp] Tool ${toolName} failed with status ${res.status}`,
+      );
+      return `Error: Service unavailable (${res.status})`;
     }
 
     const data = await res.json();
+
+    // The MCP SDK usually returns { result: { content: [...] } }
+    if (data.result && data.result.content && data.result.content.length > 0) {
+      return data.result.content[0].text;
+    }
+
     return JSON.stringify(data);
   } catch (err) {
     console.error(`[gemini/mcp] Network error to MCP server`, err);
-    return `Search failed: ${err.message}`;
+    return `Tool failed: ${err.message}`;
   }
 }
 
@@ -166,22 +189,38 @@ async function performWebSearch(query) {
  * Returns { verdict: "YES"|"NO"|"UNCERTAIN", confidence: "HIGH"|"MEDIUM"|"LOW", reasoning, verificationSource }
  */
 export async function researchMarketOutcome(market) {
-  const searchTool = {
+  const mcpTools = {
     functionDeclarations: [
       {
         name: "web_search",
         description:
-          "Search the live web for current events, news, and cryptocurrency prices. Use this tool if the market resolution time is near or past your training data cutoff.",
+          "Search the live web for current events, news, and facts. Use this tool for general knowledge, sports, and news.",
         parameters: {
           type: "OBJECT",
           properties: {
             query: {
               type: "STRING",
               description:
-                "The specific search query to execute (e.g. 'Bitcoin price March 31 2026', 'Who won the Lakers game last night?')",
+                "The specific search query to execute (e.g. 'Who won the Lakers game last night?')",
             },
           },
           required: ["query"],
+        },
+      },
+      {
+        name: "get_crypto_price",
+        description:
+          "Fetch the exact, real-time price of a cryptocurrency in USD. Prefer this tool over web_search for crypto price markets.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            coinId: {
+              type: "STRING",
+              description:
+                "The ID of the coin (e.g. 'bitcoin', 'ethereum', 'solana', 'initia'). Use full names, not tickers.",
+            },
+          },
+          required: ["coinId"],
         },
       },
     ],
@@ -189,7 +228,7 @@ export async function researchMarketOutcome(market) {
 
   const model = getClient().getGenerativeModel({
     model: GEMINI_MODEL,
-    tools: [searchTool],
+    tools: [mcpTools],
   });
 
   const closeDate = new Date(market.closeTime * 1000).toUTCString();
@@ -231,17 +270,20 @@ When you are ready to conclude, respond with ONLY valid JSON in this exact forma
     let responseObj = result.response;
     let funcCall = responseObj.functionCalls()?.[0];
 
-    // Allow up to 3 chained search calls to gather full context if needed
+    // Allow up to 3 chained tool calls to gather full context if needed
     let maxLoops = 3;
-    while (funcCall && funcCall.name === "web_search" && maxLoops > 0) {
-      const searchResultStr = await performWebSearch(funcCall.args.query);
+    while (funcCall && maxLoops > 0) {
+      const toolName = funcCall.name;
+      const toolArgs = funcCall.args;
+
+      const toolResultStr = await performMCPToolCall(toolName, toolArgs);
 
       // Feed the result back to Gemini
       result = await chat.sendMessage([
         {
           functionResponse: {
-            name: "web_search",
-            response: { result: searchResultStr },
+            name: toolName,
+            response: { result: toolResultStr },
           },
         },
       ]);
