@@ -129,12 +129,68 @@ Respond with this exact JSON format:
 }
 
 /**
+ * Performs a web search using our Cloudflare MCP server (or external search wrapper).
+ * @param {string} query
+ */
+async function performWebSearch(query) {
+  try {
+    console.log(`[gemini/mcp] Performing web search: "${query}"`);
+    // Assuming you run the Cloudflare worker locally on port 8787.
+    // You can also change this to the production URL later.
+    const MCP_SERVER_URL =
+      process.env.MCP_SERVER_URL || "http://127.0.0.1:8787/search";
+
+    // We make a direct call to the worker endpoint we set up
+    const res = await fetch(MCP_SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!res.ok) {
+      console.error(`[gemini/mcp] Search failed with status ${res.status}`);
+      return `Search error: ${res.statusText}`;
+    }
+
+    const data = await res.json();
+    return JSON.stringify(data);
+  } catch (err) {
+    console.error(`[gemini/mcp] Network error to MCP server`, err);
+    return `Search failed: ${err.message}`;
+  }
+}
+
+/**
  * Research a market's likely outcome using AI.
  * @param {object} market - { id, question, category, closeTime, resolveTime }
  * Returns { verdict: "YES"|"NO"|"UNCERTAIN", confidence: "HIGH"|"MEDIUM"|"LOW", reasoning, verificationSource }
  */
 export async function researchMarketOutcome(market) {
-  const model = getClient().getGenerativeModel({ model: GEMINI_MODEL });
+  const searchTool = {
+    functionDeclarations: [
+      {
+        name: "web_search",
+        description:
+          "Search the live web for current events, news, and cryptocurrency prices. Use this tool if the market resolution time is near or past your training data cutoff.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: {
+              type: "STRING",
+              description:
+                "The specific search query to execute (e.g. 'Bitcoin price March 31 2026', 'Who won the Lakers game last night?')",
+            },
+          },
+          required: ["query"],
+        },
+      },
+    ],
+  };
+
+  const model = getClient().getGenerativeModel({
+    model: GEMINI_MODEL,
+    tools: [searchTool],
+  });
 
   const closeDate = new Date(market.closeTime * 1000).toUTCString();
   const resolveDate = new Date(market.resolveTime * 1000).toUTCString();
@@ -146,20 +202,56 @@ Category: ${market.category}
 Market closed at: ${closeDate}
 Resolution time: ${resolveDate}
 
-Based on information you can find online right now, determine the most likely outcome as of the resolution time.
-If the event was in the future relative to your knowledge cutoff, say UNCERTAIN.
+IMPORTANT RULES: 
+1. If the current date is close to or past your knowledge cutoff, you MUST use the "web_search" tool to gather live information.
+2. Even if you think you know the answer, use the "web_search" tool to verify exact figures like crypto prices or recent sports outcomes before finalizing your verdict.
+3. Be as definitive as possible (YES or NO) based on what you find.
+4. Only return UNCERTAIN if the search results explicitly contradict each other or the exact outcome is genuinely unknowable.
 
-Respond with ONLY valid JSON in this exact format:
+SEARCH STRATEGY BEST PRACTICES (CRITICAL FOR 100% ACCURACY):
+- Do NOT just copy/paste the market question into the search tool. Reframe it into a highly targeted information query.
+- Use explicit dates, times, and specific entities. (e.g., instead of "Did ETH go above 2100 today?", use "ETH USD price chart closing history \${resolveDate}").
+- For sports, search the exact match date and teams (e.g., "Lakers vs Warriors final box score \${resolveDate}").
+- If your first search query doesn't yield the exact answer, you are allowed up to 3 tool calls. For your next attempt, change the query strategy. Try targeting a specific authoritative source by appending words like "CoinGecko", "ESPN", "Reuters", or "Bloomberg" to your query.
+- Always compare the verified timestamp of the event against the market's Resolution time to ensure the event actually concluded.
+
+When you are ready to conclude, respond with ONLY valid JSON in this exact format:
 {
   "verdict": "YES" | "NO" | "UNCERTAIN",
   "confidence": "HIGH" | "MEDIUM" | "LOW",
-  "reasoning": "2-3 sentence explanation of why you chose this verdict based on known facts",
-  "verificationSource": "Where an admin can verify this result (e.g. 'CoinGecko BTC/USD historical data', 'ESPN game results', 'official announcement')"
+  "reasoning": "2-3 sentence explanation of why you chose this verdict based on known facts and web search results",
+  "verificationSource": "Where an admin can verify this result based on your tool output"
 }`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
+    const chat = model.startChat();
+    let result = await chat.sendMessage(prompt);
+
+    // Check if the model decided to call the web_search tool
+    let responseObj = result.response;
+    let funcCall = responseObj.functionCalls()?.[0];
+
+    // Allow up to 3 chained search calls to gather full context if needed
+    let maxLoops = 3;
+    while (funcCall && funcCall.name === "web_search" && maxLoops > 0) {
+      const searchResultStr = await performWebSearch(funcCall.args.query);
+
+      // Feed the result back to Gemini
+      result = await chat.sendMessage([
+        {
+          functionResponse: {
+            name: "web_search",
+            response: { result: searchResultStr },
+          },
+        },
+      ]);
+
+      responseObj = result.response;
+      funcCall = responseObj.functionCalls()?.[0];
+      maxLoops--;
+    }
+
+    const text = responseObj.text().trim();
     const json = text
       .replace(/^```json\s*/i, "")
       .replace(/```\s*$/, "")
