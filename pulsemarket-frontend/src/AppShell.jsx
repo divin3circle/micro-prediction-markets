@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
 import { TopNav } from "./components/TopNav";
@@ -8,21 +8,18 @@ import { DepositPendingPill } from "./components/DepositPendingPill";
 import { StatsFabButton } from "./components/StatsFabButton";
 import { usePulseMarkets, useUserPositions } from "./hooks/usePulseMarkets";
 import { usePulseMarketTx } from "./lib/pulseMarketApi";
-import { useAutoSignSession } from "./context/AutoSignSessionContext";
 import { useBalances } from "./hooks/useBalances";
 import { useFlashMessage } from "./hooks/useFlashMessage";
+import { useTransactionActions } from "./hooks/useTransactionActions";
+import { useBetModal } from "./hooks/useBetModal";
+import { useAutoSignSession } from "./context/AutoSignSessionContext";
 import { AppRoutes } from "./routes/AppRoutes";
 
 export function AppShell() {
   const navigate = useNavigate();
   const { initiaAddress, openConnect, openBridge } = useInterwovenKit();
-  const {
-    sessionActive,
-    initializeSession,
-    clearSession,
-    isInitializing,
-    isSessionExpiredError,
-  } = useAutoSignSession();
+  const { sessionActive, initializeSession, isInitializing } =
+    useAutoSignSession();
 
   const tx = usePulseMarketTx();
   const { markets, loading, error, refresh } = usePulseMarkets();
@@ -48,73 +45,19 @@ export function AppShell() {
     openBridge,
     setFlash,
   });
-
-  const [betState, setBetState] = useState({
-    open: false,
-    market: null,
-    side: true,
+  const { betState, openBet, closeBet } = useBetModal();
+  const { runAndSync } = useTransactionActions({
+    setFlash,
+    refreshMarkets: refresh,
+    refreshPositions,
   });
+
   const [betResultModal, setBetResultModal] = useState({
     open: false,
     kind: "success",
     title: "",
     message: "",
   });
-
-  const openBet = useCallback(
-    (market, side) => {
-      if (!initiaAddress) {
-        openConnect?.();
-        return;
-      }
-      setBetState({ open: true, market, side });
-    },
-    [initiaAddress, openConnect],
-  );
-
-  const closeBet = useCallback(
-    () => setBetState({ open: false, market: null, side: true }),
-    [],
-  );
-
-  const runAndSync = useCallback(
-    async (
-      runner,
-      successMessage,
-      options = { requiresAutoSign: false, skipAutoSignInit: false },
-    ) => {
-      const { requiresAutoSign = false, skipAutoSignInit = false } = options;
-      try {
-        if (requiresAutoSign && !skipAutoSignInit && !sessionActive) {
-          setFlash(
-            "Allow PulseMarket to place bets on your behalf during this session",
-          );
-          await initializeSession();
-        }
-        await runner();
-        await Promise.all([refresh(), refreshPositions()]);
-        setFlash(successMessage);
-        return true;
-      } catch (e) {
-        if (requiresAutoSign && isSessionExpiredError(e)) {
-          await clearSession();
-          setFlash("Session expired — tap ⚡ to re-enable auto-signing");
-          return false;
-        }
-        setFlash(e?.message || "Transaction failed");
-        return false;
-      }
-    },
-    [
-      clearSession,
-      initializeSession,
-      isSessionExpiredError,
-      refresh,
-      refreshPositions,
-      sessionActive,
-      setFlash,
-    ],
-  );
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">

@@ -1,6 +1,7 @@
 .agents/
 .claude/
 .dist/
+dist/
 skills-lock.json
 prediction-market-spec.md
 

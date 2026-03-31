@@ -24,7 +24,11 @@ function getClient() {
  * Validate a market question + timing window before creation.
  * Returns { ok, verdict, reason }
  */
-export async function validateMarketQuestion({ question, closeTime, resolveTime }) {
+export async function validateMarketQuestion({
+  question,
+  closeTime,
+  resolveTime,
+}) {
   const nowSec = Math.floor(Date.now() / 1000);
   const maxResolveSec =
     nowSec + Math.floor(MAX_VALIDATION_FUTURE_DAYS * 24 * 60 * 60);
@@ -117,7 +121,8 @@ Respond with this exact JSON format:
     return {
       verdict: "UNKNOWN",
       ok: false,
-      reason: "AI validation unavailable — cannot approve market creation right now.",
+      reason:
+        "AI validation unavailable — cannot approve market creation right now.",
       verificationSource: "N/A",
     };
   }
@@ -141,7 +146,7 @@ Category: ${market.category}
 Market closed at: ${closeDate}
 Resolution time: ${resolveDate}
 
-Based on your knowledge, determine the most likely outcome as of the resolution time.
+Based on information you can find online right now, determine the most likely outcome as of the resolution time.
 If the event was in the future relative to your knowledge cutoff, say UNCERTAIN.
 
 Respond with ONLY valid JSON in this exact format:
