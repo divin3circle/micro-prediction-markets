@@ -1,4 +1,5 @@
 import cron from "node-cron";
+
 import {
   getMarketsToClose,
   getClosedMarkets,
@@ -7,12 +8,7 @@ import {
 import { closeMarket, resolveMarket } from "./txHelper.js";
 import { researchMarketOutcome } from "./gemini.js";
 import { logError } from "./errorLogging.js";
-
-/**
- * In-memory verdict store.
- * Key: marketId, Value: verdict object from researchMarketOutcome
- */
-export const verdictStore = new Map();
+import { verdictStore, loadVerdicts, saveVerdicts } from "./verdictStore.js";
 
 /** Track markets that are currently being processed to avoid double-runs */
 const inProgress = new Set();
@@ -68,8 +64,10 @@ async function runAiResearch() {
     return;
   }
 
-  // Only research markets we haven't processed yet
-  const unresearched = markets.filter((m) => !verdictStore.has(m.id));
+  // Only research markets we haven't processed yet and not RESOLVED
+  const unresearched = markets.filter(
+    (m) => !verdictStore.has(m.id) && m.status !== 2,
+  );
 
   if (unresearched.length === 0) return;
 
@@ -87,6 +85,7 @@ async function runAiResearch() {
       );
       const verdict = await researchMarketOutcome(market);
       verdictStore.set(market.id, verdict);
+      saveVerdicts();
       console.log(
         `[agent/ai-research] Market ${market.id} verdict: ${verdict.verdict} (${verdict.confidence} confidence)`,
       );
@@ -176,6 +175,7 @@ async function runAutoResolve() {
 export async function researchMarket(market) {
   const verdict = await researchMarketOutcome(market);
   verdictStore.set(market.id, verdict);
+  saveVerdicts();
   return verdict;
 }
 
@@ -184,6 +184,9 @@ export async function researchMarket(market) {
  */
 export function startAgent() {
   console.log("[agent] Starting PulseMarket agent…");
+
+  // Load verdicts from disk before starting any jobs
+  loadVerdicts();
 
   // Run immediately on startup
   runAutoClose();
