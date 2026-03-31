@@ -21,7 +21,7 @@ export class MyMCP extends McpAgent<Env> {
       {
         query: z.string().describe("The specific search query to execute"),
       },
-      async ({ query }) => {
+      async ({ query }: { query: string }) => {
         const apiKey = this.env.SERPER_API_KEY;
         if (!apiKey) {
           return {
@@ -98,7 +98,7 @@ export class MyMCP extends McpAgent<Env> {
             "The CoinGecko coin ID (e.g., 'bitcoin', 'ethereum', 'solana')",
           ),
       },
-      async ({ coinId }) => {
+      async ({ coinId }: { coinId: string }) => {
         try {
           const cgKey = this.env.COINGECKO_KEY;
           const response = await fetch(
