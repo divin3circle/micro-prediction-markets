@@ -138,15 +138,14 @@ async function performMCPToolCall(toolName, args, timeoutMs = 15000) {
   let transport;
   try {
     console.log(`[gemini/mcp] Executing tool: ${toolName} with args:`, args);
-    let mcpUrl = process.env.MCP_SERVER_URL || "https://pulsemarket-mcp.sylus-abel.workers.dev/mcp";
-    // Sanitize: trim, remove trailing slashes except for /mcp
+    let mcpUrl =
+      process.env.MCP_SERVER_URL ||
+      "https://pulsemarket-mcp.sylus-abel.workers.dev/mcp";
     mcpUrl = mcpUrl.trim().replace(/\/$/, "");
     if (!mcpUrl.endsWith("/mcp")) {
       mcpUrl += "/mcp";
     }
     console.log(`[gemini/mcp] Using Streamable HTTP URL: ${mcpUrl}`);
-    // Use StreamableHTTPClientTransport — Cloudflare McpAgent uses the MCP
-    // Streamable HTTP protocol (POST /mcp), NOT the legacy SSE GET transport.
     transport = new StreamableHTTPClientTransport(new URL(mcpUrl));
 
     const client = new Client(
@@ -316,7 +315,9 @@ OUTPUT FORMAT — CRITICAL: Your final message MUST be ONLY a raw JSON object wi
         json = match[0];
       } else {
         // Gemini returned pure text with no JSON — treat as UNCERTAIN, don't crash
-        console.warn(`[gemini] No JSON found in response for market ${market.id}. Raw: ${text.slice(0, 200)}`);
+        console.warn(
+          `[gemini] No JSON found in response for market ${market.id}. Raw: ${text.slice(0, 200)}`,
+        );
         return {
           marketId: market.id,
           question: market.question,
