@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
+// verdicts prop: { [marketId]: { verdict, confidence, reasoning, verificationSource } }
+
 const YES_COLOR = "#22C55E";
 const NO_COLOR = "#EF4444";
 
@@ -34,7 +36,7 @@ function useCountdown(closeTime) {
   return `${h}h ${m}m ${s}s`;
 }
 
-export function MarketCard({ market, onBet }) {
+export function MarketCard({ market, onBet, verdict }) {
   const countdown = useCountdown(market.closeTime);
   const pool = market.totalYesAmount + market.totalNoAmount;
   const yesPct = useMemo(() => {
@@ -155,6 +157,32 @@ export function MarketCard({ market, onBet }) {
           </button>
         </div>
       </div>
+
+      {/* Verdict display for resolved markets */}
+      {market.status === 2 && verdict && (
+        <div className="mt-4 rounded-xl border border-[#2A2A35] bg-[#18181C] p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs font-bold uppercase text-[#B7B7C8]">
+              AI Verdict:
+            </span>
+            <span
+              className={`px-2 py-1 rounded-full text-xs font-semibold ${verdict.verdict === "YES" ? "bg-[#14532D] text-[#86EFAC]" : verdict.verdict === "NO" ? "bg-[#7F1D1D] text-[#FCA5A5]" : "bg-[#334155] text-[#FACC15]"}`}
+            >
+              {verdict.verdict}
+            </span>
+            <span className="ml-2 px-2 py-1 rounded-full text-xs bg-[#232334] text-[#B7B7C8]">
+              {verdict.confidence} confidence
+            </span>
+          </div>
+          <div className="mb-1 text-sm text-[#D1D5DB]">{verdict.reasoning}</div>
+          {verdict.verificationSource && (
+            <div className="text-xs text-[#A1A1B0]">
+              <span className="font-medium">Source:</span>{" "}
+              {verdict.verificationSource}
+            </div>
+          )}
+        </div>
+      )}
     </article>
   );
 }

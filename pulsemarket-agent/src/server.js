@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
-import { startAgent, verdictStore, researchMarket } from "./agent.js";
-// verdictStore is now imported from verdictStore.js via agent.js
+import { startAgent, researchMarket } from "./agent.js";
+import { verdictStore } from "./verdictStore.js";
 import { getStats, getAllMarkets, getMarket } from "./marketApi.js";
 import { resolveMarket } from "./txHelper.js";
 import { validateMarketQuestion } from "./gemini.js";
