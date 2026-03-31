@@ -1,5 +1,9 @@
 import cron from "node-cron";
-import { getMarketsToClose, getClosedMarkets, getAllMarkets } from "./marketApi.js";
+import {
+  getMarketsToClose,
+  getClosedMarkets,
+  getAllMarkets,
+} from "./marketApi.js";
 import { closeMarket, resolveMarket } from "./txHelper.js";
 import { researchMarketOutcome } from "./gemini.js";
 import { logError } from "./errorLogging.js";
@@ -151,11 +155,15 @@ async function runAutoResolve() {
         `[agent/auto-resolve] Market ${market.id} resolved to ${verdict.verdict}. tx: ${txHash}`,
       );
     } catch (err) {
-      logError(`[agent/auto-resolve] Failed to resolve market ${market.id}`, err, {
-        marketId: market.id,
-        question: market.question,
-        verdict: verdictStore.get(market.id),
-      });
+      logError(
+        `[agent/auto-resolve] Failed to resolve market ${market.id}`,
+        err,
+        {
+          marketId: market.id,
+          question: market.question,
+          verdict: verdictStore.get(market.id),
+        },
+      );
     } finally {
       inProgress.delete(resolveKey);
     }
@@ -188,8 +196,8 @@ export function startAgent() {
     runAutoClose();
   });
 
-  // AI research: every 5 minutes
-  cron.schedule("*/5 * * * *", () => {
+  // AI research: every minute
+  cron.schedule("* * * * *", () => {
     console.log("[agent/ai-research] Tick");
     runAiResearch();
   });

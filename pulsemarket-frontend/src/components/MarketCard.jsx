@@ -43,6 +43,33 @@ export function MarketCard({ market, onBet }) {
   }, [market.totalYesAmount, pool]);
   const noPct = 100 - yesPct;
 
+  // Calculate odds multiplier (payout ratio)
+  const yesOdds = useMemo(() => {
+    if (market.totalYesAmount === 0 && market.totalNoAmount === 0) return 2.0;
+    if (market.totalYesAmount === 0) return pool > 0 ? "High" : 2.0; // If some NO but no YES, YES odds are very high
+
+    // Total pool after 2% fee
+    const feeBps = 200;
+    const fee = Math.floor((pool * feeBps) / 10000);
+    const netPool = pool - fee;
+
+    // What you get back for 1 unit bet (including the unit itself)
+    return (netPool / market.totalYesAmount).toFixed(2);
+  }, [market.totalYesAmount, market.totalNoAmount, pool]);
+
+  const noOdds = useMemo(() => {
+    if (market.totalYesAmount === 0 && market.totalNoAmount === 0) return 2.0;
+    if (market.totalNoAmount === 0) return pool > 0 ? "High" : 2.0; // If some YES but no NO, NO odds are very high
+
+    // Total pool after 2% fee
+    const feeBps = 200;
+    const fee = Math.floor((pool * feeBps) / 10000);
+    const netPool = pool - fee;
+
+    // What you get back for 1 unit bet (including the unit itself)
+    return (netPool / market.totalNoAmount).toFixed(2);
+  }, [market.totalYesAmount, market.totalNoAmount, pool]);
+
   const isUrgent = market.closeTime - Math.floor(Date.now() / 1000) < 300;
 
   return (
@@ -82,13 +109,17 @@ export function MarketCard({ market, onBet }) {
 
       <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="rounded-xl border border-[#2A2A35] bg-[#0D0D0F] px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wide text-[#6B7280]">Close</p>
+          <p className="text-[10px] uppercase tracking-wide text-[#6B7280]">
+            Close
+          </p>
           <p className="mt-1 text-xs font-medium text-[#D1D5DB]">
             {formatDateTime(market.closeTime)}
           </p>
         </div>
         <div className="rounded-xl border border-[#2A2A35] bg-[#0D0D0F] px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wide text-[#6B7280]">Resolve</p>
+          <p className="text-[10px] uppercase tracking-wide text-[#6B7280]">
+            Resolve
+          </p>
           <p className="mt-1 text-xs font-medium text-[#D1D5DB]">
             {formatDateTime(market.resolveTime)}
           </p>
@@ -106,7 +137,10 @@ export function MarketCard({ market, onBet }) {
             className="rounded-xl border px-3 py-2 text-sm text-white active:scale-[0.97]"
             style={{ background: "#15803D", borderColor: YES_COLOR }}
           >
-            YES
+            YES{" "}
+            {yesOdds !== "High" && !isNaN(yesOdds) && Number(yesOdds) !== 2
+              ? `(${yesOdds}x)`
+              : ""}
           </button>
           <button
             type="button"
@@ -114,7 +148,10 @@ export function MarketCard({ market, onBet }) {
             className="rounded-xl border px-3 py-2 text-sm text-white active:scale-[0.97]"
             style={{ background: "#991B1B", borderColor: NO_COLOR }}
           >
-            NO
+            NO{" "}
+            {noOdds !== "High" && !isNaN(noOdds) && Number(noOdds) !== 2
+              ? `(${noOdds}x)`
+              : ""}
           </button>
         </div>
       </div>
