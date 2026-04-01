@@ -46,6 +46,7 @@ function calculatePotentialPayout(market, position) {
 
 export function PositionsView({
   positions,
+  pendingBet,
   onClaimWin,
   onClaimRefund,
   loading,
@@ -58,6 +59,23 @@ export function PositionsView({
 
   return (
     <div className="space-y-3">
+      {pendingBet && (
+        <div className="rounded-2xl border border-[#2A2A35] bg-[#121218] p-4">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#3A3A48] bg-[#1B1B24] px-2.5 py-1 text-[11px] font-medium text-[#A1A1B0]">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#7C5CFC]" />
+            Syncing position update...
+          </div>
+          <div className="space-y-3 animate-pulse">
+            <div className="h-4 w-2/3 rounded bg-[#232334]" />
+            <div className="flex gap-3">
+              <div className="h-4 w-24 rounded bg-[#232334]" />
+              <div className="h-4 w-24 rounded bg-[#232334]" />
+            </div>
+            <div className="h-12 rounded-xl bg-[#232334]" />
+          </div>
+        </div>
+      )}
+
       {currentAddress && (
         <div className="rounded-xl flex items-center gap-2 bg-[#101015] px-3 py-2 text-xs text-[#A1A1B0]">
           Account: <UserDisplay address={currentAddress} className="text-[#E5E7EB]" />

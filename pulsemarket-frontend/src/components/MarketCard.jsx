@@ -36,7 +36,7 @@ function useCountdown(closeTime) {
   return `${h}h ${m}m ${s}s`;
 }
 
-export function MarketCard({ market, onBet, verdict }) {
+export function MarketCard({ market, onBet, verdict, pending = false }) {
   const countdown = useCountdown(market.closeTime);
   const pool = market.totalYesAmount + market.totalNoAmount;
   const yesPct = useMemo(() => {
@@ -75,7 +75,35 @@ export function MarketCard({ market, onBet, verdict }) {
   const isUrgent = market.closeTime - Math.floor(Date.now() / 1000) < 300;
 
   return (
-    <article className="mb-4 rounded-2xl bg-[#16161A] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+    <article
+      className={`mb-4 rounded-2xl p-5 shadow-[0_18px_40px_rgba(0,0,0,0.35)] ${
+        pending
+          ? "border border-[#2A2A35] bg-[#121218]"
+          : "bg-[#16161A]"
+      }`}
+    >
+      {pending && (
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#3A3A48] bg-[#1B1B24] px-2.5 py-1 text-[11px] font-medium text-[#A1A1B0]">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-[#7C5CFC]" />
+          Updating market...
+        </div>
+      )}
+
+      {pending ? (
+        <div className="space-y-3 animate-pulse">
+          <div className="h-5 w-4/5 rounded bg-[#232334]" />
+          <div className="h-2 w-full rounded-full bg-[#232334]" />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="h-16 rounded-xl bg-[#232334]" />
+            <div className="h-16 rounded-xl bg-[#232334]" />
+          </div>
+          <div className="flex gap-2">
+            <div className="h-10 flex-1 rounded-xl bg-[#232334]" />
+            <div className="h-10 flex-1 rounded-xl bg-[#232334]" />
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="mb-3 flex items-center justify-between">
         <span className="rounded-full bg-[#232334] px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-[#B7B7C8]">
           {market.category}
@@ -182,6 +210,8 @@ export function MarketCard({ market, onBet, verdict }) {
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </article>
   );

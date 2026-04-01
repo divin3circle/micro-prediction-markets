@@ -7,6 +7,8 @@ import { MarketsPage } from "../pages/MarketsPage";
 export function AppRoutes({
   onOpenBet,
   markets,
+  pendingMarketId,
+  pendingBet,
   loading,
   error,
   onRefresh,
@@ -30,6 +32,7 @@ export function AppRoutes({
           <MarketsPage
             onOpenBet={onOpenBet}
             markets={markets}
+            pendingMarketId={pendingMarketId}
             loading={loading}
             error={error}
             onRefresh={onRefresh}
@@ -46,6 +49,7 @@ export function AppRoutes({
           <PositionsView
             positions={positions}
             loading={loadingPositions}
+            pendingBet={pendingBet}
             currentAddress={initiaAddress}
             onClaimWin={onClaimWin}
             onClaimRefund={onClaimRefund}

@@ -6,6 +6,7 @@ import { MarketCard } from "../components/MarketCard";
 export function MarketsPage({
   onOpenBet,
   markets,
+  pendingMarketId,
   loading,
   error,
   onRefresh,
@@ -68,6 +69,7 @@ export function MarketsPage({
             market={market}
             onBet={onOpenBet}
             verdict={verdicts[market.id]}
+            pending={pendingMarketId === market.id}
           />
         ))}
       </div>

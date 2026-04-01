@@ -64,10 +64,24 @@ async function runAiResearch() {
     return;
   }
 
-  // Only research markets we haven't processed yet and not RESOLVED
-  const unresearched = markets.filter(
-    (m) => !verdictStore.has(m.id) && m.status !== 2,
-  );
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // Only research CLOSED markets after their resolveTime has passed.
+  const candidates = markets.filter((m) => m.status === 1);
+  const futureMarkets = candidates.filter((m) => nowSec < m.resolveTime);
+  if (futureMarkets.length > 0) {
+    console.log(
+      `[agent/ai-research] Skipping ${futureMarkets.length} market(s) because resolveTime is in the future.`,
+    );
+  }
+
+  // Research markets with no verdict yet OR retry prior LOW/UNCERTAIN verdicts.
+  const unresearched = candidates.filter((m) => {
+    if (nowSec < m.resolveTime) return false;
+    const existing = verdictStore.get(m.id);
+    if (!existing) return true;
+    return existing.verdict === "UNCERTAIN" && existing.confidence === "LOW";
+  });
 
   if (unresearched.length === 0) return;
 

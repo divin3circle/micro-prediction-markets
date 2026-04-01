@@ -270,6 +270,11 @@ OUTPUT FORMAT — CRITICAL: Your final message MUST be ONLY a raw JSON object wi
 }`;
 
   try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    console.log(
+      `[gemini] Research start market=${market.id} now=${nowSec} resolveTime=${market.resolveTime}`,
+    );
+
     const chat = model.startChat({
       tools: [mcpTools],
     });
@@ -278,12 +283,20 @@ OUTPUT FORMAT — CRITICAL: Your final message MUST be ONLY a raw JSON object wi
     // Check if the model decided to call the web_search tool
     let responseObj = result.response;
     let funcCall = responseObj.functionCalls()?.[0];
+    let toolCallsMade = 0;
+
+    if (!funcCall) {
+      console.log(
+        `[gemini] Model returned without tool call for market ${market.id}.`,
+      );
+    }
 
     // Allow up to 3 chained tool calls to gather full context if needed
     let maxLoops = 3;
     while (funcCall && maxLoops > 0) {
       const toolName = funcCall.name;
       const toolArgs = funcCall.args;
+      toolCallsMade++;
 
       const toolResultStr = await performMCPToolCall(toolName, toolArgs);
 
@@ -316,7 +329,7 @@ OUTPUT FORMAT — CRITICAL: Your final message MUST be ONLY a raw JSON object wi
       } else {
         // Gemini returned pure text with no JSON — treat as UNCERTAIN, don't crash
         console.warn(
-          `[gemini] No JSON found in response for market ${market.id}. Raw: ${text.slice(0, 200)}`,
+          `[gemini] No JSON found in response for market ${market.id}. toolCallsMade=${toolCallsMade}. Raw: ${text.slice(0, 200)}`,
         );
         return {
           marketId: market.id,

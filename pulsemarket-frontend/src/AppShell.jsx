@@ -58,6 +58,7 @@ export function AppShell() {
     title: "",
     message: "",
   });
+  const [pendingBet, setPendingBet] = useState(null);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -132,6 +133,8 @@ export function AppShell() {
         <AppRoutes
           onOpenBet={openBet}
           markets={markets}
+          pendingMarketId={pendingBet?.marketId ?? null}
+          pendingBet={pendingBet}
           loading={loading}
           error={error}
           onRefresh={refresh}
@@ -179,6 +182,11 @@ export function AppShell() {
         onClose={closeBet}
         onPlace={async (payload) => {
           const { onAutoSignStart, onTxStart, ...txPayload } = payload;
+          setPendingBet({
+            marketId: txPayload.marketId,
+            side: txPayload.betYes ? "YES" : "NO",
+            amount: txPayload.amount,
+          });
 
           try {
             if (!sessionActive) {
@@ -225,6 +233,8 @@ export function AppShell() {
                 e?.message || "We could not place your bet. Please try again.",
             });
             return false;
+          } finally {
+            setPendingBet(null);
           }
         }}
       />

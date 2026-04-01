@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node --experimental-specifier-resolution=node --import ./cjs-loader.mjs src/server.js",
     "dev": "node --experimental-specifier-resolution=node --import ./cjs-loader.mjs --watch src/server.js",
+    "rerun:research": "node --experimental-specifier-resolution=node --import ./cjs-loader.mjs scripts/rerun_research.js",
     "postinstall": "patch-package"
   },
   "dependencies": {
