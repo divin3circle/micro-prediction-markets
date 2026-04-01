@@ -326,6 +326,62 @@ module pulse_market::pulse_market_tests {
         assert!(vault_after_claim == vault_before + 0, 103);
     }
 
+    #[test(publisher = @pulse_market, user_a = @0x81, user_b = @0x82, user_c = @0x83, caller = @0x84)]
+    fun test_all_yes_no_wins_refund(
+        publisher: signer,
+        user_a: signer,
+        user_b: signer,
+        user_c: signer,
+        caller: signer,
+    ) {
+        setup(&publisher);
+        let a_addr = signer::address_of(&user_a);
+        let b_addr = signer::address_of(&user_b);
+        let c_addr = signer::address_of(&user_c);
+        fund(a_addr);
+        fund(b_addr);
+        fund(c_addr);
+
+        let umin = coin::metadata(@minitia_std, string::utf8(b"umin"));
+        let a_before = coin::balance(a_addr, umin);
+        let b_before = coin::balance(b_addr, umin);
+        let c_before = coin::balance(c_addr, umin);
+
+        let a_bet = 900;
+        let b_bet = 600;
+        let c_bet = 300;
+
+        let close_time = BASE_TIME + 15;
+        let resolve_time = BASE_TIME + 25;
+        pulse_market::create_market(
+            &publisher,
+            string::utf8(b"All yes market"),
+            string::utf8(b"news"),
+            close_time,
+            resolve_time,
+        );
+
+        pulse_market::place_bet(&user_a, 0, true, a_bet);
+        pulse_market::place_bet(&user_b, 0, true, b_bet);
+        pulse_market::place_bet(&user_c, 0, true, c_bet);
+
+        timestamp::update_global_time_for_test_secs(close_time + 1);
+        pulse_market::close_market(&caller, 0);
+
+        timestamp::update_global_time_for_test_secs(resolve_time + 1);
+        pulse_market::resolve_market(&publisher, 0, false);
+
+        pulse_market::claim_refund(&user_a, 0);
+        pulse_market::claim_refund(&user_b, 0);
+        pulse_market::claim_refund(&user_c, 0);
+
+        assert!(coin::balance(a_addr, umin) == a_before, 300);
+        assert!(coin::balance(b_addr, umin) == b_before, 301);
+        assert!(coin::balance(c_addr, umin) == c_before, 302);
+        assert!(pulse_market::get_vault_balance() == 0, 303);
+        assert!(pulse_market::get_fee_collected_total() == 0, 304);
+    }
+
     #[test(publisher = @pulse_market, user_a = @0x71, user_b = @0x72)]
     fun test_fee_recipient_balance_increases_exactly(
         publisher: signer,

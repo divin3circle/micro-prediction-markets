@@ -33,8 +33,10 @@ module pulse_market::pulse_market {
     const E_NOT_WINNER: u64 = 8;
     const E_ALREADY_CLAIMED: u64 = 9;
     const E_FEE_TOO_HIGH: u64 = 10;
-    const E_CLOSE_TIME_PAST: u64 = 11;
-    const E_RESOLVE_BEFORE_CLOSE: u64 = 12;
+    const E_USE_CLAIM_REFUND: u64 = 11;
+    const E_CLOSE_TIME_PAST: u64 = 12;
+    const E_RESOLVE_BEFORE_CLOSE: u64 = 13;
+    const E_NOT_REFUND_ELIGIBLE: u64 = 14;
 
     const NATIVE_SYMBOL: vector<u8> = b"umin";
     const VAULT_SEED: vector<u8> = b"pulse_market_vault";
@@ -288,9 +290,15 @@ module pulse_market::pulse_market {
         } else {
             market.total_no_amount
         };
+        let losing_side_total = if (market.outcome == OUTCOME_YES) {
+            market.total_no_amount
+        } else {
+            market.total_yes_amount
+        };
 
         assert!(user_winning_amount > 0, E_NOT_WINNER);
         assert!(total_winning_side > 0, E_NOT_WINNER);
+        assert!(losing_side_total > 0, E_USE_CLAIM_REFUND);
 
         let total_pool = market.total_yes_amount + market.total_no_amount;
         maybe_collect_fee(store, market_id, total_pool);
@@ -323,12 +331,12 @@ module pulse_market::pulse_market {
         let market = table::borrow_mut(&mut store.markets, market_id);
         assert!(market.status == STATUS_RESOLVED, E_MARKET_NOT_RESOLVED);
 
-        let total_winning_side = if (market.outcome == OUTCOME_YES) {
+        let winning_side_total = if (market.outcome == OUTCOME_YES) {
             market.total_yes_amount
         } else {
             market.total_no_amount
         };
-        assert!(total_winning_side == 0, E_NOT_WINNER);
+        assert!(winning_side_total == 0, E_NOT_REFUND_ELIGIBLE);
 
         let positions = table::borrow_mut(&mut store.positions, market_id);
         assert!(simple_map::contains_key(positions, &user_addr), E_NOT_WINNER);
@@ -336,6 +344,7 @@ module pulse_market::pulse_market {
         assert!(!position.claimed, E_ALREADY_CLAIMED);
 
         let refund_amount = position.yes_amount + position.no_amount;
+        assert!(refund_amount > 0, E_ZERO_AMOUNT);
         assert!(store.vault_balance >= refund_amount, E_NOT_WINNER);
         store.vault_balance = store.vault_balance - refund_amount;
         let vault_signer = object::generate_signer_for_extending(&store.vault_extend_ref);

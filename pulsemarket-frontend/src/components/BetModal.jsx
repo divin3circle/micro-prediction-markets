@@ -29,7 +29,8 @@ export function BetModal({
     useInitiaUsername(connectedAddress);
 
   const betMicro = toMicro(amount);
-  const totalPool = (market?.totalYesAmount ?? 0) + (market?.totalNoAmount ?? 0);
+  const totalPool =
+    (market?.totalYesAmount ?? 0) + (market?.totalNoAmount ?? 0);
   const feeBps = 200;
 
   const preview = useMemo(() => {
@@ -41,13 +42,12 @@ export function BetModal({
     const payout = Math.floor((net * betMicro) / (sideTotal + betMicro));
     const share = ((betMicro / (sideTotal + betMicro)) * 100).toFixed(1);
     return { payout, share };
-  }, [
-    betMicro,
-    feeBps,
-    market,
-    side,
-    totalPool,
-  ]);
+  }, [betMicro, feeBps, market, side, totalPool]);
+
+  const showOneSidedWarning =
+    !!market &&
+    ((side === "YES" && (market.totalNoAmount ?? 0) === 0) ||
+      (side === "NO" && (market.totalYesAmount ?? 0) === 0));
 
   if (!open || !market) return null;
 
@@ -152,6 +152,14 @@ export function BetModal({
             <span className="text-white">2%</span>
           </div>
         </div>
+
+        {showOneSidedWarning && (
+          <p className="mb-4 text-[12px] text-[#854F0B]">
+            {`Warning: You're the only side - if nobody bets ${
+              side === "YES" ? "NO" : "YES"
+            }, you'll receive a full refund if ${side} wins.`}
+          </p>
+        )}
 
         {connectedAddress && !username && !usernameLoading && (
           <p className="mb-4 text-xs text-[#A1A1B0]">
