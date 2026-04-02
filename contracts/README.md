@@ -80,7 +80,7 @@ The Move package itself does not require runtime env vars, but deployment and ap
 | `MODULE_NAME`                            | Agent/Frontend | Move module name (`pulse_market`)  |
 | `FEE_DENOM` / `VITE_FEE_DENOM`           | Agent/Frontend | Native denom for tx and accounting |
 
-## Notes For Judges
+## Note
 
 - The contract enforces a strict lifecycle with timestamp guards.
 - Oracle resolution is role-gated and auditable through emitted events.
