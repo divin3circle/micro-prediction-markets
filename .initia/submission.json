@@ -1,0 +1,12 @@
+{
+  "project_name": "Impulsive Markets",
+  "repo_url": "https://github.com/divin3circle/micro-prediction-markets",
+  "commit_sha": "10a68d33104b2a8c8b7a64291030c4363416020e",
+  "rollup_chain_id": "micro-markets",
+  "deployed_address": "init1rrlffyalu47cwryh0lswluq8wuzktpdhzqvdwq",
+  "vm": "move",
+  "native_feature": "auto-signing",
+  "core_logic_path": "contracts/sources/pulse_market.move",
+  "native_feature_frontend_path": "pulsemarket-frontend/src/lib/pulseMarketApi.js",
+  "demo_video_url": "https://youtu.be/kqa6oxIv5-o"
+}

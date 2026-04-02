@@ -1,10 +1,10 @@
 ## Initia Hackathon Submission
 
-- **Project Name**: Micro Prediction Markets
+- **Project Name**: Impulsive Markets
 
 ### Project Overview
 
-Micro Prediction Markets is a full-stack prediction market appchain demo built on Initia. It lets users create markets, place YES/NO bets, and resolve outcomes with an automated oracle workflow powered by Gemini and live web evidence. The project is valuable because it combines on-chain market logic, off-chain automation, and explainable AI verdicts into a single end-to-end product.
+Impulsive Markets is a full-stack prediction market appchain demo built on Initia. It lets users create markets, place YES/NO bets, and resolve outcomes with an automated oracle workflow powered by Gemini and live web evidence. The project is valuable because it combines on-chain market logic, off-chain automation, and explainable AI verdicts into a single end-to-end product.
 
 ### Implementation Detail
 

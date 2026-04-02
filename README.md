@@ -1,6 +1,6 @@
-# Micro Prediction Markets
+# Impulsive Markets
 
-Micro Prediction Markets is a full-stack Initia appchain project that combines:
+Impulsive Markets is a full-stack Initia appchain project that combines:
 
 - An on-chain Move contract for market creation, betting, closure, and resolution.
 - A backend agent that automates market lifecycle management and stores AI verdicts durably.
@@ -13,7 +13,7 @@ The project is designed to show a complete production-style flow: wallet interac
 
 ```json
 {
-  "project_name": "Micro Prediction Markets",
+  "project_name": "Impulsive Markets",
   "repo_url": "https://github.com/divin3circle/micro-prediction-markets",
   "commit_sha": "10a68d33104b2a8c8b7a64291030c4363416020e",
   "rollup_chain_id": "micro-markets",
@@ -22,7 +22,7 @@ The project is designed to show a complete production-style flow: wallet interac
   "native_feature": "auto-signing",
   "core_logic_path": "contracts/sources/pulse_market.move",
   "native_feature_frontend_path": "pulsemarket-frontend/src/lib/pulseMarketApi.js",
-  "demo_video_url": ""
+  "demo_video_url": "https://youtu.be/kqa6oxIv5-o"
 }
 ```
 
@@ -69,7 +69,7 @@ sequenceDiagram
 
 ```mermaid
 mindmap
-  root((Micro Prediction Markets))
+  root((Impulsive Markets))
     contracts
       pulse_market.move
       market lifecycle
