@@ -26,6 +26,57 @@ function getClient() {
   return genAI;
 }
 
+const VALIDATION_VERDICTS = new Set(["GOOD", "AMBIGUOUS", "UNVERIFIABLE"]);
+const VALIDATION_CONFIDENCE = new Set(["HIGH", "MEDIUM", "LOW"]);
+
+function extractFirstJsonObject(text) {
+  const cleaned = text
+    .replace(/^```json\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+
+  if (cleaned.startsWith("{")) return cleaned;
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  return match ? match[0] : null;
+}
+
+function normalizeValidationResponse(parsed) {
+  const verdict = VALIDATION_VERDICTS.has(parsed?.verdict)
+    ? parsed.verdict
+    : "AMBIGUOUS";
+
+  const reason =
+    typeof parsed?.reason === "string" && parsed.reason.trim()
+      ? parsed.reason.trim().slice(0, 280)
+      : "Model output did not include a valid reason.";
+
+  const verificationSource =
+    typeof parsed?.verificationSource === "string" &&
+    parsed.verificationSource.trim()
+      ? parsed.verificationSource.trim().slice(0, 280)
+      : "N/A";
+
+  const confidence = VALIDATION_CONFIDENCE.has(parsed?.confidence)
+    ? parsed.confidence
+    : "LOW";
+
+  const reasonCode =
+    typeof parsed?.reasonCode === "string" && parsed.reasonCode.trim()
+      ? parsed.reasonCode.trim().toUpperCase().slice(0, 64)
+      : "INVALID_MODEL_OUTPUT";
+
+  const ok = typeof parsed?.ok === "boolean" ? parsed.ok : verdict === "GOOD";
+
+  return {
+    verdict,
+    ok,
+    reason,
+    verificationSource,
+    confidence,
+    reasonCode,
+  };
+}
+
 /**
  * Validate a market question + timing window before creation.
  * Returns { ok, verdict, reason }
@@ -88,33 +139,66 @@ Close time (UTC): ${closeIso}
 Resolve time (UTC): ${resolveIso}
 
 Criteria:
-1. Is the question unambiguous with a clear YES/NO answer?
-2. Can it be objectively verified using a public data source (e.g. CoinGecko, ESPN, official results)?
-3. Is it free from subjective interpretation?
-4. Given the close/resolve timestamps, is the outcome likely to be objectively knowable by the resolve time?
-5. If the event is likely too far in the future for reliable resolution, mark it as UNVERIFIABLE.
+1. Question must resolve to a single, objective YES or NO.
+2. Outcome must be verifiable from a public source.
+3. Wording must avoid subjective terms (e.g., "strong", "major", "good", "likely").
+4. Event must be knowable by resolve time.
+5. If source or event is unclear, reject it.
 
-Respond with this exact JSON format:
+Scoring policy:
+- Return "GOOD" only if all criteria pass.
+- Return "AMBIGUOUS" if wording or outcome logic is unclear.
+- Return "UNVERIFIABLE" if no reliable public source or event cannot be known by resolve time.
+
+OUTPUT RULES (STRICT):
+- Return ONLY raw JSON, no markdown, no extra keys, no prose before/after.
+- Use this exact schema and enum values:
 {
   "verdict": "GOOD" | "AMBIGUOUS" | "UNVERIFIABLE",
   "ok": true | false,
-  "reason": "One sentence explanation",
-  "verificationSource": "How/where the outcome can be verified (e.g. CoinGecko BTC/USD close price)"
+  "reason": "single sentence, max 180 chars",
+  "verificationSource": "specific source + metric/event to check",
+  "confidence": "HIGH" | "MEDIUM" | "LOW",
+  "reasonCode": "SHORT_MACHINE_READABLE_CODE"
 }`;
 
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
-    // Strip markdown code fences if present
-    const json = text
-      .replace(/^```json\s*/i, "")
-      .replace(/```\s*$/, "")
-      .trim();
-    const parsed = JSON.parse(json);
-    return {
-      ...parsed,
-      ok: Boolean(parsed.ok),
-    };
+    const json = extractFirstJsonObject(text);
+
+    if (!json) {
+      console.warn(
+        `[gemini] validateMarketQuestion: no JSON found. Raw: ${text.slice(0, 200)}`,
+      );
+      return {
+        verdict: "AMBIGUOUS",
+        ok: false,
+        reason: "AI response was not in the expected JSON format.",
+        verificationSource: "N/A",
+        confidence: "LOW",
+        reasonCode: "INVALID_MODEL_OUTPUT",
+      };
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(json);
+    } catch (parseErr) {
+      console.warn(
+        `[gemini] validateMarketQuestion: JSON parse failed. Raw JSON: ${json.slice(0, 200)}`,
+      );
+      return {
+        verdict: "AMBIGUOUS",
+        ok: false,
+        reason: "AI response contained malformed JSON.",
+        verificationSource: "N/A",
+        confidence: "LOW",
+        reasonCode: "MALFORMED_JSON",
+      };
+    }
+
+    return normalizeValidationResponse(parsed);
   } catch (err) {
     logError("[gemini] validateMarketQuestion error", err, {
       model: GEMINI_MODEL,
