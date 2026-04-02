@@ -78,7 +78,7 @@ pnpm run dev
 - `src/lib/pulseMarketApi.js`: Move module view/tx adapters.
 - `src/lib/agentApi.js`: backend agent client.
 
-## Notes For Judges
+## Note:
 
 - The app demonstrates complete wallet-to-chain flow on Initia.
 - It presents explainable AI verdict metadata directly in user views.

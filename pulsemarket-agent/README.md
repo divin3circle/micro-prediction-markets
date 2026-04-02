@@ -112,7 +112,7 @@ Expected variables (from `.env.example`):
 - `POST /api/resolve/:id` (admin)
 - `POST /api/validate-question`
 
-## Notes For Judges
+## Note
 
 - Persistent verdict storage avoids recomputation and preserves auditability.
 - Auto-research is gated by `resolveTime` and retries low-confidence uncertain outcomes.

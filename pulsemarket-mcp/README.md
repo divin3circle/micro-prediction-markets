@@ -93,7 +93,7 @@ wrangler secret put COINGECKO_KEY
 - Source: CoinGecko Simple Price API
 - Output: USD price + last updated timestamp
 
-## Notes For Judges
+## Note:
 
 - MCP is isolated from chain execution for cleaner trust boundaries.
 - Tool outputs are explicit and source-attributed.
