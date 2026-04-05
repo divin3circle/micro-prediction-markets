@@ -206,14 +206,3 @@ Optional values:
 - [pulsemarket-frontend/README.md](pulsemarket-frontend/README.md)
 - [contracts/README.md](contracts/README.md)
 
-## Notes For Judges
-
-This codebase was organized to show the full stack of a modern on-chain prediction market:
-
-- deterministic on-chain state transitions
-- off-chain AI-assisted verification
-- external evidence gathering with a dedicated MCP server
-- persistent verdict storage and repeatable research
-- wallet-native user flows in the frontend
-
-The goal is not just a working demo, but a system that is explainable end-to-end.
